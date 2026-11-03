@@ -6,7 +6,9 @@ from __future__ import annotations
 import base64
 import io
 import json
+import threading
 import time
+from collections import defaultdict
 from dataclasses import dataclass
 
 import numpy as np
@@ -142,6 +144,8 @@ class VLMClient:
         self.max_tokens = max_tokens
         self.timeout_s = timeout_s
         self.cache = cache
+        self._locks: dict[str, threading.Lock] = defaultdict(threading.Lock)
+        self._locks_guard = threading.Lock()
 
     def chat_json(self, messages: list[dict], schema: dict, temperature: float = 0.0, seed: int | None = None,
                   max_tokens: int | None = None, name: str = "output") -> ChatResult:
@@ -149,10 +153,17 @@ class VLMClient:
         key = "vlm:" + digest({"model": self.model, "messages": _keyable(messages), "schema": schema,
                                "temperature": temperature, "seed": seed if temperature > 0 else None,
                                "max_tokens": max_tokens})
-        if self.cache is not None:
+        if self.cache is None:
+            return self._send(key, messages, schema, temperature, seed, max_tokens, name)
+        with self._locks_guard:
+            lock = self._locks[key]
+        with lock:  # identical concurrent requests wait for the first one and then hit the cache
             hit = self.cache.get(key)
             if hit is not None:
                 return ChatResult(hit["raw"], hit["latency_s"], cached=True)
+            return self._send(key, messages, schema, temperature, seed, max_tokens, name)
+
+    def _send(self, key, messages, schema, temperature, seed, max_tokens, name) -> ChatResult:
         kwargs = {"seed": seed} if seed is not None else {}
         t0 = time.perf_counter()
         resp = self.client.chat.completions.create(
@@ -406,5 +417,6 @@ def textchain_messages(variant: str, lidar: str, visual: str, sensors: list[str]
     user = (f"Object information (from lidar): {lidar}\nVisual Description: {visual}{TEXTCHAIN_STEPS[variant]}\n\n"
             f"The vehicle's sensors are: {', '.join(sensors)}. Report which sensor, if any, is abnormal. Return "
             "JSON with verdict (ok, uncertain, or fault:<sensor>), fault_type, and confidence (0 to 1)"
-            + (" after your reasoning fields." if TEXTCHAIN_REASONING[variant] else "."))
+            + (" after your reasoning fields. Keep each reasoning field to at most five sentences."
+               if TEXTCHAIN_REASONING[variant] else "."))
     return [{"role": "system", "content": TEXTCHAIN_SYSTEM[variant]}, {"role": "user", "content": user}]

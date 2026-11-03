@@ -7,6 +7,7 @@ and turns any exception from the model server into an invalid attempt, so one ba
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass
 
 import numpy as np
@@ -55,18 +56,22 @@ class AgentCaller:
         self.fault: AgentFaultState | None = None
         self.attempt = 0
         self.n_calls = 0
+        self._lock = threading.Lock()
 
     def new_frame(self, fault: AgentFaultState | None) -> None:
         self.fault = fault
         self.attempt = 0
 
     def call(self, messages: list[dict], schema: dict, temperature: float = 0.0, seed: int | None = None,
-             max_tokens: int | None = None, diagnosis: bool = True, name: str = "output") -> Attempt:
-        """One model call. Only diagnosis calls count as attempts and can be hit by agent faults."""
-        idx = self.attempt
-        if diagnosis:
-            self.attempt += 1
-        self.n_calls += 1
+             max_tokens: int | None = None, diagnosis: bool = True, name: str = "output",
+             attempt_idx: int | None = None) -> Attempt:
+        """One model call. Only diagnosis calls count as attempts and can be hit by agent faults.
+        Pass `attempt_idx` for calls issued in parallel, so fault injection stays deterministic."""
+        with self._lock:
+            idx = self.attempt if attempt_idx is None else attempt_idx
+            if diagnosis:
+                self.attempt = max(self.attempt, idx + 1)
+            self.n_calls += 1
         try:
             res = self.client.chat_json(messages, schema, temperature=temperature, seed=seed, max_tokens=max_tokens,
                                         name=name)

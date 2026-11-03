@@ -144,10 +144,15 @@ def run_one(spec: RunSpec, env: EvalEnv) -> dict:
             ctx = FrameContext(frame, label, check, summary, mosaic, prev_mosaic, bev, sensors_of(cams),
                                frame_seed(spec.seed, spec.scene, idx), agent_fault, dets, prev_frame)
             outputs = {}
-            for m in methods:
+
+            def timed(m, ctx=ctx):
                 t0 = time.perf_counter()
-                outputs.update(m.step(ctx))
-                lat["method:" + "+".join(m.names)] = time.perf_counter() - t0
+                return m, m.step(ctx), time.perf_counter() - t0
+
+            with ThreadPoolExecutor(len(methods)) as pool:  # methods are independent within a frame
+                for m, out, dt in pool.map(timed, methods):
+                    outputs.update(out)
+                    lat["method:" + "+".join(m.names)] = dt
             event = plan[idx]
             writer.write({
                 "scene": spec.scene, "frame_idx": idx, "run_fault": spec.fault_id, "seed": spec.seed,

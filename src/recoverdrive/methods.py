@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import ClassVar
 
@@ -100,9 +101,11 @@ class Ours:
         self.rcfg = RecoveryConfig(**cfg.get("recovery", {}))
         self.controller = RecoveryController(self.rcfg)
 
-    def diagnose(self, ctx: FrameContext, temperature: float = 0.0, seed: int | None = None) -> Attempt:
+    def diagnose(self, ctx: FrameContext, temperature: float = 0.0, seed: int | None = None,
+                 attempt_idx: int | None = None) -> Attempt:
         msgs = ours_messages(ctx.summary, ctx.mosaic, ctx.prev_mosaic, ctx.bev)
-        return self.caller.call(msgs, ours_schema(ctx.sensors), temperature=temperature, seed=seed, name="diagnosis")
+        return self.caller.call(msgs, ours_schema(ctx.sensors), temperature=temperature, seed=seed, name="diagnosis",
+                                attempt_idx=attempt_idx)
 
     def step(self, ctx: FrameContext) -> dict[str, MethodOutput]:
         self.caller.new_frame(ctx.agent_fault)
@@ -125,8 +128,11 @@ class Ours:
         samples: list[Attempt] = []
         if valid and (diag.status != "ok" or flagged):  # suspected fault: sample and vote
             steps.append("resample")
-            samples = [self.diagnose(ctx, self.rcfg.sample_temperature, ctx.frame_seed * 10 + i)
-                       for i in range(self.rcfg.n_samples)]
+            base = len(attempts)
+            with ThreadPoolExecutor(self.rcfg.n_samples) as pool:
+                samples = list(pool.map(
+                    lambda i: self.diagnose(ctx, self.rcfg.sample_temperature, ctx.frame_seed * 10 + i, base + i),
+                    range(self.rcfg.n_samples)))
             voted = [to_diagnosis(a.data) for a in samples if a.valid]
             if voted:
                 diag, _ = vote(voted)
@@ -188,7 +194,7 @@ class TextChain:
     verdict. No recovery: the verdict feeds the shared shield through no_recovery (plan D2, D9)."""
 
     VARIANTS: ClassVar[dict[str, str]] = {"B1": "zero_shot", "B2": "cot", "B3": "self_refine"}
-    MAX_TOKENS: ClassVar[dict[str, int]] = {"zero_shot": 128, "cot": 640, "self_refine": 896}
+    MAX_TOKENS: ClassVar[dict[str, int]] = {"zero_shot": 256, "cot": 2048, "self_refine": 2048}
 
     def __init__(self, name: str, client: VLMClient):
         self.names = (name,)
@@ -205,7 +211,9 @@ class TextChain:
     def step(self, ctx: FrameContext) -> dict[str, MethodOutput]:
         self.caller.new_frame(ctx.agent_fault)
         cams = [s.split(":", 1)[1] for s in ctx.sensors if s.startswith("camera:")]
-        visual = "\n".join(f"{c}: {self.caption(c, ctx.frame.cameras[c].image)}" for c in cams)
+        with ThreadPoolExecutor(len(cams)) as pool:
+            captions = list(pool.map(lambda c: self.caption(c, ctx.frame.cameras[c].image), cams))
+        visual = "\n".join(f"{c}: {text}" for c, text in zip(cams, captions))
         msgs = textchain_messages(self.variant, lidar_text(ctx), visual, ctx.sensors)
         att = self.caller.call(msgs, textchain_schema(self.variant, ctx.sensors),
                                max_tokens=self.MAX_TOKENS[self.variant], name="diagnosis")

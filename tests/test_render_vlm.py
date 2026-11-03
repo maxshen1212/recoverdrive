@@ -84,3 +84,33 @@ def test_caller_applies_a2_flip():
     caller.new_frame(AgentFaultState("A2", "low", {"n_affected": 1, "seed": 0}))
     att = caller.call(_messages(), ours_schema(SENSORS))
     assert att.valid and att.data["verdict"].startswith("fault:") and att.clean_data == GOOD
+
+
+def test_chat_json_dedupes_concurrent_identical_requests(tmp_path):
+    import threading
+    import time
+
+    calls = []
+
+    def slow(req):
+        calls.append(1)
+        time.sleep(0.05)
+        return GOOD
+
+    client = VLMClient("http://x", "m", cache=KVCache(tmp_path / "c.sqlite"), client=FakeOpenAI(slow))
+    schema = ours_schema(SENSORS)
+    threads = [threading.Thread(target=client.chat_json, args=(_messages(), schema)) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(calls) == 1
+
+
+def test_caller_explicit_attempt_index():
+    caller = AgentCaller(VLMClient("http://x", "m", client=FakeOpenAI()))
+    caller.new_frame(AgentFaultState("A1", "medium", {"n_affected": 2, "kind": "garbage"}))
+    schema = ours_schema(SENSORS)
+    assert caller.call(_messages(), schema, attempt_idx=2).valid  # index 2 is past the affected attempts
+    assert not caller.call(_messages(), schema, attempt_idx=1).valid
+    assert caller.attempt == 3
