@@ -1,0 +1,51 @@
+[project]
+name = "recoverdrive"
+version = "0.1.0"
+description = "Fault-aware recovery and safety fallback for multi-agent autonomous driving"
+authors = [
+    { name = "max", email = "maxshen1212@gmail.com" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch==2.14.1",
+    "torchvision",
+    "transformers==5.22.1",
+    "accelerate",
+    "nuscenes-devkit==1.2.0",
+    "numpy>=2,<2.4",
+    "openai",
+    "rerun-sdk==0.41.0",
+    "scipy",
+    "scikit-learn",
+    "matplotlib",
+    "pillow",
+    "pyyaml",
+    "tqdm",
+]
+
+[dependency-groups]
+dev = ["pytest", "ruff"]
+
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+# nuscenes-devkit pins numpy<2, but rerun-sdk/scipy/opencv need numpy>=2.
+# We only use the devkit's loaders and geometry helpers, which tests cover.
+override-dependencies = ["numpy>=2,<2.4"]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110

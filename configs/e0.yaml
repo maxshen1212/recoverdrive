@@ -1,0 +1,52 @@
+# E0 pilot (spec §7): 1 dev scene, CAM_FRONT only, fault C1 on about half the frames.
+seed: 0
+
+data:
+  version: v1.0-mini
+  scene: scene-0061
+  monitored_cameras: [CAM_FRONT]
+  # Extra cameras loaded only as fault sources (C1 swaps CAM_FRONT with CAM_BACK).
+  source_cameras: [CAM_BACK]
+
+faults:
+  enabled: [C1]
+  fault_ratio: 0.5
+  min_episode_len: 2
+  max_episode_len: 6
+  c1:
+    target: CAM_FRONT
+    source: CAM_BACK
+
+checks:
+  max_range_m: 50.0
+  min_points_in_box: 5
+  iou_threshold: 0.3
+  min_box_px: 10
+
+# nuScenes category prefix -> detector class. Categories not listed are ignored.
+categories:
+  vehicle.car: car
+  vehicle.truck: truck
+  vehicle.bus: bus
+  human.pedestrian.adult: pedestrian
+  human.pedestrian.child: pedestrian
+  human.pedestrian.construction_worker: pedestrian
+  human.pedestrian.police_officer: pedestrian
+  vehicle.bicycle: bicycle
+  vehicle.motorcycle: motorcycle
+
+sam3:
+  model_id: facebook/sam3
+  prompts: [car, truck, bus, pedestrian, bicycle, motorcycle]
+  score_threshold: 0.5
+
+vlm:
+  base_url: http://127.0.0.1:8000/v1
+  model: qwen3-vl-8b-instruct
+  temperature: 0.0
+  max_tokens: 256
+  timeout_s: 60
+
+output:
+  root: outputs/e0
+  overlay_frames: 6

@@ -1,0 +1,22 @@
+# nuScenes-mini scene-level split (spec §3.1): 6 dev scenes, 4 test scenes.
+# Frames from one scene never appear in both splits.
+#
+# Stratified by condition so test is not all-day or all-night:
+#   night (3):         scene-1077, scene-1094, scene-1100      -> 1 test
+#   Boston day (4):    scene-0103, scene-0553, scene-0655, scene-0757 -> 2 test
+#   Singapore day (3): scene-0061, scene-0796, scene-0916      -> 1 test
+# Within each stratum, test scenes were drawn with random.Random(0).sample, in the order above.
+#
+# Test scenes are only for the final report: tune prompts and thresholds on dev only.
+dev:
+  - scene-0061
+  - scene-0553
+  - scene-0655
+  - scene-0916
+  - scene-1077
+  - scene-1100
+test:
+  - scene-0103
+  - scene-0757
+  - scene-0796
+  - scene-1094

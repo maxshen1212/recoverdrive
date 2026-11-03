@@ -1,0 +1,31 @@
+# Plans and design docs
+docs/
+
+# Results and run logs
+outputs/
+
+# Datasets
+data/
+
+# Course and reference material (not code)
+*.pdf
+*.tex
+DriveAgent/
+
+# Python / uv
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Rerun recordings
+*.rrd
+
+# Local tool state
+.claude/settings.local.json
+.vscode/
+.idea/
