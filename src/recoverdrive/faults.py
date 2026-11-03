@@ -12,6 +12,7 @@ import math
 from dataclasses import dataclass, field, replace
 
 import numpy as np
+from PIL import Image, ImageFilter
 
 from recoverdrive.types import FaultLabel, Frame, LidarData
 
@@ -24,6 +25,11 @@ FIXED_HIGH = ("C1", "L4")  # no severity levels; always treated as high (spec §
 # Severity parameters (plan D5). Index 0/1/2 = low/medium/high.
 L1_LEVELS = {"random": (0.3, 0.6, 0.9), "beam": (0.25, 0.5, 0.75), "sector": (45.0, 90.0, 180.0)}
 AGENT_ATTEMPTS = (1, 2, 3)  # diagnosis attempts affected in a frame (plan D4)
+C2_LEVELS = {"rotate": (2.0, 5.0, 10.0), "shift": (0.03, 0.08, 0.15)}  # degrees / fraction of image size
+C3_LEVELS = {"blur": (2.0, 5.0, 10.0), "noise": (10.0, 30.0, 60.0), "overexpose": (1.5, 2.5, 4.0),
+             "black": (None, None, None)}  # Gaussian sigma (px) / noise std / gain; black is always high
+C4_LAGS = (1, 2, "freeze")  # repeat the image from 1 or 2 keyframes ago, or hold the last good image
+L2_LEVELS = ((0.1, 0.5), (0.3, 2.0), (1.0, 5.0))  # (translation m, yaw deg)
 A1_KINDS = ("truncate", "missing_field", "garbage")
 # HDL-32E elevation range used to bin points into 32 beams.
 BEAM_ELEV_DEG = (-30.67, 10.67)
@@ -96,6 +102,27 @@ def sample_event(fault_id: str, episode_id: int, rng: np.random.Generator, cfg: 
         params = {"subtype": subtype, "level": L1_LEVELS[subtype][level], "seed": seed,
                   "azimuth_deg": float(rng.uniform(-180, 180))}
         return FaultEvent("L1", "lidar", severity, episode_id, params)
+    if fault_id in ("C2", "C3", "C4"):
+        cam = _pick_camera(rng, cameras, cfg.get("front_camera_prob", 0.5))
+        params: dict = {"camera": cam, "seed": seed}
+        if fault_id == "C2":
+            subtype = str(rng.choice(list(C2_LEVELS)))
+            params.update(subtype=subtype, level=C2_LEVELS[subtype][level], sign=int(rng.choice([-1, 1])))
+        elif fault_id == "C3":
+            subtype = str(rng.choice(list(C3_LEVELS)))
+            if subtype == "black":
+                severity = "high"
+            params.update(subtype=subtype, level=C3_LEVELS[subtype][SEVERITIES.index(severity)])
+        else:
+            params["lag"] = C4_LAGS[level]
+        return FaultEvent(fault_id, f"camera:{cam}", severity, episode_id, params)
+    if fault_id == "L2":
+        t, yaw = L2_LEVELS[level]
+        params = {"translation_m": t, "yaw_deg": yaw * int(rng.choice([-1, 1])),
+                  "direction_deg": float(rng.uniform(0, 360)), "seed": seed}
+        return FaultEvent("L2", "lidar", severity, episode_id, params)
+    if fault_id == "L4":
+        return FaultEvent("L4", "lidar", severity, episode_id, {"seed": seed})
     if fault_id in AGENT_FAULTS:
         params = {"n_affected": AGENT_ATTEMPTS[level], "seed": seed}
         if fault_id == "A1":
@@ -158,6 +185,49 @@ def inject_l1(points: np.ndarray, subtype: str, level: float, rng: np.random.Gen
     return points[keep]
 
 
+def inject_c2(image: np.ndarray, subtype: str, level: float, sign: int) -> np.ndarray:
+    """C2 misalignment: rotate by sign*level degrees, or shift by level x image size; borders become black."""
+    if subtype == "rotate":
+        return np.asarray(Image.fromarray(image).rotate(sign * level, resample=Image.BILINEAR, fillcolor=(0, 0, 0)))
+    h, w = image.shape[:2]
+    dx, dy = round(sign * level * w), round(sign * level * h)
+    out = np.zeros_like(image)
+    out[max(dy, 0):h + min(dy, 0), max(dx, 0):w + min(dx, 0)] = \
+        image[max(-dy, 0):h - max(dy, 0), max(-dx, 0):w - max(dx, 0)]
+    return out
+
+
+def inject_c3(image: np.ndarray, subtype: str, level: float | None, rng: np.random.Generator) -> np.ndarray:
+    """C3 image degradation: Gaussian blur, Gaussian noise, overexposure (gain), or an all-black frame."""
+    if subtype == "black":
+        return np.zeros_like(image)
+    if subtype == "blur":
+        return np.asarray(Image.fromarray(image).filter(ImageFilter.GaussianBlur(radius=level)))
+    if subtype == "noise":
+        return np.clip(image.astype(np.float32) + rng.normal(0, level, image.shape), 0, 255).astype(np.uint8)
+    if subtype == "overexpose":
+        return np.clip(image.astype(np.float32) * level, 0, 255).astype(np.uint8)
+    raise ValueError(f"unknown C3 subtype {subtype}")
+
+
+def inject_l2(points: np.ndarray, translation_m: float, yaw_deg: float, direction_deg: float) -> np.ndarray:
+    """L2 calibration shift: rotate the cloud about z by yaw_deg, then translate it horizontally."""
+    if len(points) == 0:
+        return points
+    yaw, d = np.radians(yaw_deg), np.radians(direction_deg)
+    rot = np.array([[np.cos(yaw), -np.sin(yaw)], [np.sin(yaw), np.cos(yaw)]])
+    out = np.array(points, copy=True)
+    out[:, :2] = points[:, :2] @ rot.T + translation_m * np.array([np.cos(d), np.sin(d)])
+    return out
+
+
+def _with_image(frame: Frame, camera: str, image: np.ndarray, path: str | None = None) -> Frame:
+    cams = dict(frame.cameras)
+    cam = frame.cameras[camera]
+    cams[camera] = replace(cam, image=image, image_path=cam.image_path if path is None else path)
+    return replace(frame, cameras=cams)
+
+
 def _with_points(frame: Frame, points: np.ndarray) -> Frame:
     assert frame.lidar is not None
     lidar: LidarData = replace(frame.lidar, points=points)
@@ -188,7 +258,26 @@ class SensorFaultInjector:
             pts = inject_l1(frame.lidar.points, p["subtype"], p["level"], rng, p["azimuth_deg"],
                             beam_rng=np.random.default_rng(p["seed"]))
             return _with_points(frame, pts), ev.label()
-        raise NotImplementedError(f"fault {ev.fault_id} is not implemented yet")
+        if ev.fault_id == "C2":
+            img = inject_c2(frame.cameras[p["camera"]].image, p["subtype"], p["level"], p["sign"])
+            return _with_image(frame, p["camera"], img), ev.label()
+        if ev.fault_id == "C3":
+            rng = np.random.default_rng([p["seed"], frame.frame_idx])
+            img = inject_c3(frame.cameras[p["camera"]].image, p["subtype"], p["level"], rng)
+            return _with_image(frame, p["camera"], img), ev.label()
+        if ev.fault_id == "C4":
+            src_idx = p["start"] - 1 if p["lag"] == "freeze" else frame.frame_idx - p["lag"]
+            src_idx = max(src_idx, 0)
+            originals = originals or {}
+            src = originals.get(src_idx) or (originals[min(originals)] if originals else frame)
+            cam = src.cameras[p["camera"]]
+            return _with_image(frame, p["camera"], cam.image, cam.image_path), ev.label()
+        if ev.fault_id == "L2":
+            pts = inject_l2(frame.lidar.points, p["translation_m"], p["yaw_deg"], p["direction_deg"])
+            return _with_points(frame, pts), ev.label()
+        if ev.fault_id == "L4":
+            return _with_points(frame, frame.lidar.points[:0]), ev.label()
+        raise NotImplementedError(f"fault {ev.fault_id} is not implemented")
 
 
 # --- agent faults -----------------------------------------------------------------------------------------
