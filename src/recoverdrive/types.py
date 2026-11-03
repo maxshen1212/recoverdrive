@@ -112,6 +112,11 @@ class CheckReport:
     point_count_delta: int | None = None
     agent_output_valid: bool | None = None
     flags: list[str] = field(default_factory=list)
+    lidar_n_in_range: int = 0  # GT boxes within range (denominator of lidar_visible_ratio)
+    lidar_sector_counts: list[int] = field(default_factory=list)  # points per azimuth sector, 2-50 m
+    # Of the in-range GT boxes that a camera detection confirms, the share the LiDAR also sees (>= k points).
+    lidar_camera_agreement: float | None = None
+    lidar_camera_n: int = 0  # camera-confirmed boxes behind lidar_camera_agreement
 
 
 @dataclass

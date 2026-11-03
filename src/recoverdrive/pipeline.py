@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 
 from recoverdrive.checks import (
     CameraConsistency,
+    CheckConfig,
     build_report,
     camera_consistency,
     frozen_camera_flags,
@@ -16,13 +17,7 @@ from recoverdrive.detectors.sam3 import Sam3Detector
 from recoverdrive.types import CheckReport, Det2D, Diagnosis, Frame
 from recoverdrive.vlm import VLMClient, VLMResult, summarize_report
 
-
-@dataclass
-class CheckConfig:
-    max_range_m: float = 50.0
-    min_points_in_box: int = 5
-    iou_threshold: float = 0.3
-    min_box_px: float = 10.0
+__all__ = ["CheckConfig", "DetectDiagnosePipeline", "FrameResult"]
 
 
 @dataclass
