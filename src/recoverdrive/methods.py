@@ -133,8 +133,9 @@ class Ours:
         result = self.controller.step(diag if valid else None, valid, flagged, steps)  # 2-3. re-observe, isolate
         action = shield(result)
         isolated = [s for s in result.isolated_sensors if s != "agent"]
+        reasked = "reask" in steps  # a bad agent output was noticed, even if re-asking then fixed it
         if result.final_state == "healthy":
-            pred = "none"
+            pred = "agent" if reasked else "none"
         elif isolated:
             pred = isolated[0]
         elif "agent" in result.isolated_sensors:
@@ -148,7 +149,8 @@ class Ours:
             extra["agent_recovered"] = valid and same_verdict(diag, first.clean_data)
         all_calls = attempts + samples
         outputs["ours_full"] = MethodOutput(
-            diag if valid else None, valid, result.final_state != "healthy", pred, recovery=result, action=action,
+            diag if valid else None, valid, result.final_state != "healthy" or reasked, pred, recovery=result,
+            action=action,
             n_calls=len(all_calls), latency_s=sum(a.latency_s for a in all_calls), extra=extra)
         return outputs
 

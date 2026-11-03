@@ -63,6 +63,7 @@ def test_ours_full_reask_recovers_a1():
     full = outs["ours_full"]
     assert full.valid and full.recovery.final_state == "healthy" and full.extra["agent_recovered"]
     assert full.recovery.steps_taken == ["reask"] and full.n_calls == 2
+    assert full.alarm and full.pred_sensor == "agent"  # E1: the agent fault was detected (and recovered)
 
 
 def test_ours_full_resamples_and_isolates():
