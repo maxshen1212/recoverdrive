@@ -43,7 +43,7 @@ from recoverdrive.types import Action, FaultLabel, Pose
 from recoverdrive.vlm import VLMClient, healthy_servers, image_part, summarize_checks
 
 IDENTITY = Pose(np.array([1.0, 0, 0, 0]), np.zeros(3))
-TM_PORT = 8100  # the TM default (8000) is taken by vLLM
+TM_PORT = 8100  # the TM default (8000) is taken by vLLM; --tm-port changes it per process
 
 
 def find_routes(cmap, n: int, length: float) -> list:
@@ -164,6 +164,17 @@ class Sensors:
                 a.destroy()
 
 
+def clear_world(world) -> int:
+    """Destroy leftover vehicles, walkers and sensors (e.g. from a killed run). Each process owns its server."""
+    stale = [a for a in world.get_actors() if a.type_id.startswith(("vehicle.", "walker.", "sensor.", "controller."))]
+    for a in stale:
+        if a.type_id.startswith("sensor.") and a.is_listening:
+            a.stop()
+        a.destroy()
+    world.tick()
+    return len(stale)
+
+
 def gt_boxes_and_velocities(world, ego_id: int):
     boxes, vel = [], {}
     for a in world.get_actors():
@@ -215,6 +226,7 @@ def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, 
     if done.exists():
         return json.loads(done.read_text())
     rng = np.random.default_rng([seed, route_idx])
+    clear_world(world)
     bp = world.get_blueprint_library()
     tm = client.get_trafficmanager(TM_PORT)
     tm.set_synchronous_mode(True)
@@ -359,22 +371,30 @@ def load_e3_config(path: Path) -> dict:
     return deep_merge(base, e3.get("overrides", {}))
 
 
+E3_METRICS = {"collision_rate": "collision", "route_completion": "route_completion",
+              "unnecessary_stops": "unnecessary_stop_rate"}
+
+
 def e3_table(results: list[dict]) -> str:
+    """Per method x condition: each metric is averaged over runs within a seed, then mean +- std over seeds."""
     rows = []
     for m in dict.fromkeys(r["method"] for r in results):
         for cond in ("clean", "C1", "all"):
             rs = [r for r in results if r["method"] == m and (cond == "all" or r["condition"] == cond)]
             if not rs:
                 continue
-            rows.append({"method": m, "condition": cond, "runs": len(rs),
-                         "collision_rate": float(np.mean([r["collision"] for r in rs])),
-                         "route_completion": float(np.mean([r["route_completion"] for r in rs])),
-                         "unnecessary_stops": float(np.mean([r["unnecessary_stop_rate"] for r in rs]))})
-    return markdown_table(rows, ["method", "condition", "runs", "collision_rate", "route_completion",
-                                 "unnecessary_stops"])
+            seeds = sorted({r["seed"] for r in rs})
+            row = {"method": m, "condition": cond, "runs": len(rs), "seeds": len(seeds)}
+            for col, key in E3_METRICS.items():
+                per_seed = [float(np.mean([r[key] for r in rs if r["seed"] == sd])) for sd in seeds]
+                row[col] = float(np.mean(per_seed))
+                row[f"{col}_std"] = float(np.std(per_seed)) if len(seeds) > 1 else None
+            rows.append(row)
+    return markdown_table(rows, ["method", "condition", "runs", "seeds", *E3_METRICS])
 
 
 def main():
+    global TM_PORT
     p = argparse.ArgumentParser()
     p.add_argument("--config", default="configs/e3.yaml", help="CARLA overrides on top of its `base` config")
     p.add_argument("--methods", nargs="+", default=["B0", "B1", "ours_full"])
@@ -392,8 +412,21 @@ def main():
     p.add_argument("--cruise-kmh", type=float, default=30.0)
     p.add_argument("--slow-kmh", type=float, default=10.0)
     p.add_argument("--ttc-s", type=float, default=2.0)
+    p.add_argument("--tm-port", type=int, default=TM_PORT, help="one per process when several CARLA servers run")
+    p.add_argument("--vlm-url", nargs="*", default=None, help="override the VLM server list of the config")
+    p.add_argument("--summarize", action="store_true", help="only build the table from finished runs of --tag")
     args = p.parse_args()
+    if args.summarize:
+        out_dir = Path("outputs/e3") / args.tag
+        results = [json.loads(f.read_text()) for f in sorted(out_dir.glob("r*_s*.json"))]
+        text = f"# E3 ({args.tag}): {len(results)} runs\n\n" + e3_table(results)
+        (out_dir / "summary.md").write_text(text + "\n")
+        print(text)
+        return
     cfg = load_e3_config(Path(args.config))
+    if args.vlm_url:
+        cfg["vlm"]["base_url"] = args.vlm_url
+    TM_PORT = args.tm_port
     out_dir = Path("outputs/e3") / args.tag
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "meta.json").write_text(json.dumps({"args": vars(args), "config": cfg}, indent=2))
@@ -412,6 +445,7 @@ def main():
     settings = world.get_settings()
     settings.synchronous_mode, settings.fixed_delta_seconds = True, args.dt
     world.apply_settings(settings)
+    print(f"cleared {clear_world(world)} leftover actors")
     routes = find_routes(world.get_map(), args.routes, args.route_m)
     print(f"{len(routes)} routes: {[(round(r.location.x), round(r.location.y)) for r in routes]}")
     hazards = ["lead_brake", "pedestrian"]
@@ -421,8 +455,13 @@ def main():
             for i, tf in enumerate(routes):
                 for cond in args.conditions:
                     for m in args.methods:
-                        res = run_route(client, world, cfg, args, i, tf, hazards[i % 2], cond, m, seed, detector, vlm,
-                                        out_dir)
+                        try:
+                            res = run_route(client, world, cfg, args, i, tf, hazards[i % 2], cond, m, seed, detector,
+                                            vlm, out_dir)
+                        except RuntimeError as exc:  # log and continue; the run stays undone for a rerun
+                            print(json.dumps({"failed": f"r{i}_{hazards[i % 2]}_{cond}_{m}_s{seed}", "error": repr(exc)}))
+                            clear_world(world)
+                            continue
                         results.append(res)
                         print(json.dumps(res))
     finally:
