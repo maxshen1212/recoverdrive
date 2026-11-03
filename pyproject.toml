@@ -25,12 +25,15 @@ dependencies = [
 
 [dependency-groups]
 dev = ["pytest", "ruff"]
+# CARLA 0.9.16 Python client (E3). The server lives outside the repo (scripts/carla_server.sh).
+carla = ["carla==0.9.16"]
 
 [build-system]
 requires = ["uv_build>=0.12.21,<0.13.0"]
 build-backend = "uv_build"
 
 [tool.uv]
+default-groups = ["dev", "carla"]
 # nuscenes-devkit pins numpy<2, but rerun-sdk/scipy/opencv need numpy>=2.
 # We only use the devkit's loaders and geometry helpers, which tests cover.
 override-dependencies = ["numpy>=2,<2.4"]

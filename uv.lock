@@ -73,6 +73,15 @@ wheels = [
 ]
 
 [[package]]
+name = "carla"
+version = "0.9.16"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a4/37/c43a7c9d0dc8bd8d0791116998a49c178ab4906a0430150b21372306e520/carla-0.9.16-cp312-cp312-manylinux_2_31_x86_64.whl", hash = "sha256:c323a7b1f8ad3ac81cfac79f5d96c9cac8afa6d0a768fa2fffa46bb336945c4f", size = 34230684, upload-time = "2025-09-14T07:54:50.049Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/6f/47b4778834ed2bbc8e3312e533c82fdd000ce71cff2ade01d0804ec69a96/carla-0.9.16-cp312-cp312-win_amd64.whl", hash = "sha256:f1f22d153b1a43b579d90e816b7016ca19f1483ca64cbc5ebbcd4dbf325e3356", size = 5037190, upload-time = "2025-09-14T07:54:52.916Z" },
+]
+
+[[package]]
 name = "click"
 version = "8.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -834,6 +843,7 @@ wheels = [
 name = "pyarrow"
 version = "26.0.1"
 source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bc/5e/9cb2a56d5e293aab4e2fbecc5b0620d93227d66b8d5a63c554c31e1f80fe/pyarrow-26.0.1.tar.gz", hash = "sha256:93affcbd8a343e98dc19e9ec8fe17271ebf8fe98102d8b7454175074409f8b72", size = 1237985, upload-time = "2026-11-03T10:54:17.563Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/61/81/dc5814d61f8c956363e81bcaba61b4712a5d227324d40c766b3858160711/pyarrow-26.0.1-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:217497a51fd41abb74502ba2f4900872e0944c226945c02ee8a1cb4f81df3392", size = 37290209, upload-time = "2026-11-03T10:49:25.185Z" },
     { url = "https://files.pythonhosted.org/packages/f7/c8/dcc42b1cceb69ff032fa16430bd82c086b933e35ef05ab521e56313b76be/pyarrow-26.0.1-cp312-cp312-macosx_12_0_x86_64.whl", hash = "sha256:a2c5e9cec45b318917b630dc040cf197aef624d94866ab2c8e709708057123d2", size = 39757493, upload-time = "2026-11-03T10:49:30.886Z" },
@@ -1005,6 +1015,9 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+carla = [
+    { name = "carla" },
+]
 dev = [
     { name = "pytest" },
     { name = "ruff" },
@@ -1029,6 +1042,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+carla = [{ name = "carla", specifier = "==0.9.16" }]
 dev = [
     { name = "pytest" },
     { name = "ruff" },
