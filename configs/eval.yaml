@@ -1,0 +1,64 @@
+# E1/E2 evaluation (spec §5). Tune prompts and thresholds on dev only; set frozen: true (and commit) before the
+# single test-split run. scripts/run_eval.py refuses --split test otherwise.
+frozen: false
+
+data:
+  version: v1.0-mini
+  cameras: [CAM_FRONT, CAM_FRONT_LEFT, CAM_FRONT_RIGHT, CAM_BACK, CAM_BACK_LEFT, CAM_BACK_RIGHT]
+
+faults:
+  fault_ratio: 0.5
+  min_episode_len: 2
+  max_episode_len: 6
+  front_camera_prob: 0.5  # C2-C4 target CAM_FRONT with this probability, else another camera
+  c1: {target: CAM_FRONT, source: CAM_BACK}
+
+checks:
+  max_range_m: 50.0
+  min_points_in_box: 5
+  iou_threshold: 0.3
+  min_box_px: 10
+
+# Initial values (spec §4.1 and clean-dev probe); calibrated on dev in Phase 3, then frozen.
+thresholds:
+  match_rate_min: 0.5
+  min_gt: 2
+  match_drop: 0.5
+  min_points: 30000
+  point_drop: 0.3
+  n_sectors: 12
+  sector_min_points: 200
+  visible_ratio_min: 0.3
+  agreement_min: 0.5
+
+recovery:
+  max_reask: 2
+  n_samples: 3
+  sample_temperature: 0.7
+  conf_threshold: 0.6
+
+categories:
+  vehicle.car: car
+  vehicle.truck: truck
+  vehicle.bus: bus
+  human.pedestrian.adult: pedestrian
+  human.pedestrian.child: pedestrian
+  human.pedestrian.construction_worker: pedestrian
+  human.pedestrian.police_officer: pedestrian
+  vehicle.bicycle: bicycle
+  vehicle.motorcycle: motorcycle
+
+sam3:
+  model_id: facebook/sam3
+  prompts: [car, truck, bus, pedestrian, bicycle, motorcycle]
+  score_threshold: 0.5
+
+vlm:
+  base_url: http://127.0.0.1:8000/v1
+  model: qwen3-vl-8b-instruct
+  max_tokens: 256
+  timeout_s: 180
+
+cache: outputs/cache/eval.sqlite
+output:
+  root: outputs/eval

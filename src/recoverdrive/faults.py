@@ -224,7 +224,7 @@ class AgentFaultState:
                 data = json.loads(raw)
             except json.JSONDecodeError:
                 return raw[: max(1, len(raw) // 2)]
-            for key in ("status", "sensor", "confidence"):
+            for key in ("verdict", "status", "sensor", "confidence"):
                 data.pop(key, None)
             return json.dumps(data)
         return "Sorry, I cannot help with that request."

@@ -150,10 +150,10 @@ def test_l1_injector_keeps_beams_fixed_within_episode():
 
 
 def test_a1_corrupts_first_n_attempts():
-    raw = json.dumps({"evidence": "x", "status": "ok", "sensor": "none", "confidence": 0.9})
+    raw = json.dumps({"verdict": "ok", "fault_type": "none", "confidence": 0.9, "evidence": "x"})
     st = AgentFaultState("A1", "medium", {"n_affected": 2, "kind": "missing_field"})
     assert st.affects(0) and st.affects(1) and not st.affects(2)
-    assert "status" not in json.loads(st.corrupt_output(raw))
+    assert "verdict" not in json.loads(st.corrupt_output(raw))
     trunc = AgentFaultState("A1", "low", {"n_affected": 1, "kind": "truncate"})
     with pytest.raises(json.JSONDecodeError):
         json.loads(trunc.corrupt_output(raw))

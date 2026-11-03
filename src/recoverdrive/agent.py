@@ -31,6 +31,13 @@ class Attempt:
 def flip_verdict(data: dict, sensors: list[str], rng: np.random.Generator) -> dict:
     """A2: a well-formed but wrong answer (ok <-> fault)."""
     out = dict(data)
+    if "verdict" in data:
+        healthy = data["verdict"] == "ok"
+        out["verdict"] = f"fault:{rng.choice(sensors)}" if healthy else "ok"
+        out["confidence"] = 0.9
+        if "fault_type" in out:
+            out["fault_type"] = "other" if healthy else "none"
+        return out
     if data.get("status") == "ok":
         out.update(status="fault", sensor=str(rng.choice(sensors)), confidence=0.9)
         if "fault_type" in out:
@@ -77,7 +84,9 @@ class AgentCaller:
             if fid == "A1":
                 raw = self.fault.corrupt_output(raw)
             elif fid == "A2" and clean is not None:
-                sensors = [s for s in schema["properties"]["sensor"]["enum"] if s != "none"]
+                props = schema["properties"]
+                sensors = ([v[len("fault:"):] for v in props["verdict"]["enum"] if v.startswith("fault:")]
+                           if "verdict" in props else [s for s in props["sensor"]["enum"] if s != "none"])
                 rng = np.random.default_rng([self.fault.params.get("seed", 0), idx])
                 raw = json.dumps(flip_verdict(clean, sensors, rng))
         data = validate_json(raw, schema)

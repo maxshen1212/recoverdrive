@@ -1,7 +1,7 @@
 import json
-from types import SimpleNamespace
 
 import numpy as np
+from fakes import GOOD, FakeOpenAI
 
 from recoverdrive.agent import AgentCaller
 from recoverdrive.cache import KVCache
@@ -10,25 +10,6 @@ from recoverdrive.render import camera_mosaic, lidar_bev
 from recoverdrive.vlm import VLMClient, image_part, ours_messages, ours_schema, to_diagnosis, validate_json
 
 SENSORS = ["camera:CAM_FRONT", "camera:CAM_BACK", "lidar"]
-GOOD = {"evidence": "all consistent", "status": "ok", "sensor": "none", "fault_type": "none", "confidence": 0.9}
-
-
-class FakeOpenAI:
-    """Minimal stand-in for openai.OpenAI: returns `reply` (or raises) and counts calls."""
-
-    def __init__(self, reply=GOOD, exc=None):
-        self.calls = []
-        self.reply, self.exc = reply, exc
-        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
-
-    def _create(self, **kwargs):
-        self.calls.append(kwargs)
-        if self.exc:
-            raise self.exc
-        content = self.reply if isinstance(self.reply, str) else json.dumps(self.reply)
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
-
-
 def test_render_mosaic_shape():
     names = ["CAM_FRONT", "CAM_FRONT_LEFT", "CAM_FRONT_RIGHT", "CAM_BACK", "CAM_BACK_LEFT", "CAM_BACK_RIGHT"]
     imgs = {n: np.full((900, 1600, 3), i * 40, np.uint8) for i, n in enumerate(names)}
@@ -47,13 +28,16 @@ def test_validate_json_enums_and_ranges():
     schema = ours_schema(SENSORS)
     assert validate_json(json.dumps(GOOD), schema) == GOOD
     assert validate_json("not json", schema) is None
-    assert validate_json(json.dumps({**GOOD, "status": "bad"}), schema) is None
+    assert validate_json(json.dumps({**GOOD, "verdict": "fault:camera:CAM_LEFT"}), schema) is None
     assert validate_json(json.dumps({**GOOD, "confidence": 1.5}), schema) is None
     assert validate_json(json.dumps({**GOOD, "confidence": True}), schema) is None
     assert validate_json(json.dumps({**GOOD, "extra": 1}), schema) is None
-    assert validate_json(json.dumps({k: v for k, v in GOOD.items() if k != "sensor"}), schema) is None
+    assert validate_json(json.dumps({k: v for k, v in GOOD.items() if k != "fault_type"}), schema) is None
     d = to_diagnosis(validate_json(json.dumps(GOOD), schema))
-    assert d.status == "ok" and d.fault_type == "none" and d.evidence == "all consistent"
+    assert d.status == "ok" and d.sensor == "none" and d.fault_type == "none" and d.evidence == "all consistent"
+    f = to_diagnosis({**GOOD, "verdict": "fault:camera:CAM_FRONT"})
+    assert f.status == "fault" and f.sensor == "camera:CAM_FRONT"
+    assert next(iter(schema["properties"])) == "verdict"
 
 
 def _messages(seed_px=0):
@@ -93,3 +77,10 @@ def test_caller_records_exception_as_invalid():
     caller.new_frame(None)
     att = caller.call(_messages(), ours_schema(SENSORS))
     assert not att.valid and att.data is None and "server down" in att.error
+
+
+def test_caller_applies_a2_flip():
+    caller = AgentCaller(VLMClient("http://x", "m", client=FakeOpenAI()))
+    caller.new_frame(AgentFaultState("A2", "low", {"n_affected": 1, "seed": 0}))
+    att = caller.call(_messages(), ours_schema(SENSORS))
+    assert att.valid and att.data["verdict"].startswith("fault:") and att.clean_data == GOOD

@@ -104,10 +104,21 @@ def validate_json(raw: str, schema: dict) -> dict | None:
     return data
 
 
+def split_verdict(verdict: str) -> tuple[str, str]:
+    """'fault:<sensor>' -> ('fault', sensor); 'ok' / 'uncertain' -> (status, 'none')."""
+    if verdict.startswith("fault:"):
+        return "fault", verdict[len("fault:"):]
+    return verdict, "none"
+
+
 def to_diagnosis(data: dict | None) -> Diagnosis | None:
     if data is None:
         return None
-    return Diagnosis(status=data["status"], sensor=data["sensor"], confidence=float(data["confidence"]),
+    if "verdict" in data:
+        status, sensor = split_verdict(data["verdict"])
+    else:
+        status, sensor = data["status"], data["sensor"]
+    return Diagnosis(status=status, sensor=sensor, confidence=float(data["confidence"]),
                      fault_type=data.get("fault_type"), evidence=str(data.get("evidence", "")))
 
 
@@ -200,7 +211,28 @@ def summarize_checks(report: CheckReport, max_range: float, iou_threshold: float
     lines.append(" ".join(lidar))
     fault_flags = [f for f in report.flags if not f.endswith(":no_reference")]
     lines.append("Flags raised by the deterministic checks: " + (", ".join(fault_flags) if fault_flags else "none") + ".")
+    lines.append("Suspicious sensors according to the checks: " + suspicious_sensors(report, fault_flags) + ".")
     return "\n".join(lines)
+
+
+FLAG_WORDS = {"low_match": "camera missed most expected objects", "match_drop": "match rate dropped sharply",
+              "frozen": "image identical to the previous frame", "low_points": "far fewer LiDAR points than normal",
+              "point_drop": "LiDAR point count dropped sharply", "sector_gap": "a LiDAR direction has no points",
+              "low_visibility": "few nearby objects have LiDAR points",
+              "camera_disagree": "cameras see objects that have no LiDAR points"}
+
+
+def suspicious_sensors(report: CheckReport, fault_flags: list[str]) -> str:
+    """Flags grouped per sensor in plain words, the sensor with most flags first."""
+    groups: dict[str, list[str]] = {}
+    for f in fault_flags:
+        parts = f.split(":")
+        sensor = ":".join(parts[:2]) if parts[0] == "camera" else parts[0]
+        groups.setdefault(sensor, []).append(FLAG_WORDS.get(parts[-1], parts[-1]))
+    if not groups:
+        return "none"
+    ranked = sorted(groups.items(), key=lambda kv: -len(kv[1]))
+    return "; ".join(f"{s} ({', '.join(w)})" for s, w in ranked)
 
 
 # --- Ours: diagnosis agent prompt -------------------------------------------------------------------------------
@@ -214,37 +246,40 @@ OURS_SYSTEM = (
 )
 
 OURS_GUIDE = (
-    "How to decide:\n"
-    "- Each camera tile must show a plausible view for its direction (CAM_FRONT: the road ahead; CAM_BACK: the "
-    "road behind; side cameras: the sides). A tile that shows another camera's view, the same picture as another "
-    "tile, or a view that does not fit its direction is a wrong_viewpoint fault of that camera.\n"
-    "- A tile that is blurred, noisy, overexposed, black, rotated or shifted is a degraded_image or misalignment "
-    "fault. A tile identical to the previous frame while the scene moves is frozen_image.\n"
-    "- A match rate near 1 is healthy. A low match rate with several expected objects, especially with a flag, is "
-    "strong evidence that this camera is faulty. Missing one object is normal (occlusion, darkness, distance).\n"
-    "- A healthy LiDAR has about 34,000 points spread in all directions. Far fewer points, an empty sector in the "
-    "top view, or many camera-confirmed objects without LiDAR points mean a LiDAR fault (point_dropout, "
-    "calibration_shift, or lidar_failure when it is empty).\n"
-    "- Most frames are healthy. Answer status ok when nothing points to a fault, and fault when the evidence points "
-    "to one sensor. Use uncertain only when the evidence conflicts.\n\n"
-    "Return JSON with: evidence (one or two short sentences), status (ok, fault, or uncertain), sensor (the faulty "
-    "sensor, or none), fault_type, and confidence in your status (0 to 1)."
+    "Decide in this order:\n"
+    "1. Flags. The deterministic checks are reliable. low_match/match_drop on a camera means it missed objects "
+    "the LiDAR sees in its view; frozen means the image did not change; lidar flags mean missing points or objects. "
+    "One flag with few expected objects can be occlusion or a detector miss; a match rate near 0 with several "
+    "expected objects, or several flags on one sensor, is strong evidence of a fault of that sensor.\n"
+    "2. Images, only to confirm a flagged sensor or for obvious damage: a tile that is all black, washed out, "
+    "unrecognizable from blur or noise, tilted, or the same picture as another tile. Do not report subtle blur, "
+    "noise or darkness: night, rain, glare, motion blur and empty roads are normal. Different cameras see different "
+    "things; do not judge a camera's direction from content alone.\n"
+    "3. LiDAR top view: about 34,000 points in all directions is healthy; an empty wedge or far fewer points is a "
+    "LiDAR fault.\n"
+    "If no sensor has strong evidence, answer verdict ok with fault_type none. Answer fault:<sensor> only when the "
+    "evidence points to that sensor; uncertain only when strong evidence conflicts.\n\n"
+    "Return JSON with: verdict (ok, uncertain, or fault:<sensor>), fault_type, confidence in your verdict (0 to 1), "
+    "and evidence (one short sentence)."
 )
 
 
+EVIDENCE_FIRST = False  # field order: verdict first (fewer false alarms on dev than reasoning first)
+
+
+def verdict_enum(sensors: list[str]) -> list[str]:
+    return ["ok", "uncertain", *[f"fault:{s}" for s in sensors]]
+
+
 def ours_schema(sensors: list[str]) -> dict:
-    return {
-        "type": "object",
-        "properties": {
-            "evidence": {"type": "string"},
-            "status": {"type": "string", "enum": ["ok", "fault", "uncertain"]},
-            "sensor": {"type": "string", "enum": [*sensors, "none"]},
-            "fault_type": {"type": "string", "enum": FAULT_TYPES},
-            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        },
-        "required": ["evidence", "status", "sensor", "fault_type", "confidence"],
-        "additionalProperties": False,
+    verdict = {
+        "verdict": {"type": "string", "enum": verdict_enum(sensors)},
+        "fault_type": {"type": "string", "enum": FAULT_TYPES},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
     }
+    evidence = {"evidence": {"type": "string"}}
+    props = {**evidence, **verdict} if EVIDENCE_FIRST else {**verdict, **evidence}
+    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
 
 
 def ours_messages(summary: str, mosaic: dict, prev_mosaic: dict | None, bev: dict) -> list[dict]:
@@ -320,3 +355,56 @@ class VLMResult:
 def parse_diagnosis(raw: str, schema: dict) -> Diagnosis | None:
     """Parse and validate the VLM output against the schema; None if anything is off."""
     return to_diagnosis(validate_json(raw, schema))
+
+
+# --- B1-B3: DriveAgent-style text chain (prompts from DriveAgent/vehicle_prompts.json) --------------------------
+
+CAPTION_SYSTEM = (
+    "You are a visual perception assistant for an autonomous vehicle. Describe what this camera image shows "
+    "that could impact driving.")
+CAPTION_USER = (
+    "This image comes from the {camera} camera. In two or three sentences, list the road users and obstacles you "
+    "see (type, rough position: left/centre/right, near/far) and anything unusual about the image itself.")
+CAPTION_SCHEMA = {"type": "object", "properties": {"description": {"type": "string"}},
+                  "required": ["description"], "additionalProperties": False}
+
+TEXTCHAIN_SYSTEM = {
+    "zero_shot": ("You are a helpful assistant. Your task is to determine whether a vehicle is experiencing an "
+                  "abnormal situation based on the readings from two sensors."),
+    "cot": ("You are a helpful assistant. Your task is to determine whether a vehicle is experiencing an abnormal "
+            "situation based on readings from two sensors. Before providing your final answer, please outline your "
+            "reasoning step-by-step. Your chain-of-thought should include the following steps:\n1. Analyze the "
+            "LiDAR data to identify any unusual patterns or discrepancies.\n2. Analyze the visual description for "
+            "abnormal features or inconsistencies.\n3. Compare the sensor data to determine if there are any "
+            "mismatches that indicate an abnormal situation.\n4. Conclude whether the vehicle is in an abnormal "
+            "situation, and provide a final answer along with your reasoning."),
+    "self_refine": ("You are a helpful assistant. Your task is to determine whether a vehicle is experiencing an "
+                    "abnormal situation based on the readings from two sensors. You will produce an initial answer, "
+                    "critique it, and finally produce a refined answer."),
+}
+TEXTCHAIN_STEPS = {
+    "zero_shot": "",
+    "cot": "",
+    "self_refine": ("\n\nStep 1: Provide your initial analysis regarding whether there's an abnormal situation.\n"
+                    "Step 2: Critique and reflect on your initial analysis. Identify any missing details or possible "
+                    "errors.\nStep 3: Provide a refined final analysis, correcting mistakes and clarifying "
+                    "uncertainties."),
+}
+TEXTCHAIN_REASONING = {"zero_shot": [], "cot": ["reasoning"], "self_refine": ["initial_analysis", "critique",
+                                                                            "refined_analysis"]}
+
+
+def textchain_schema(variant: str, sensors: list[str]) -> dict:
+    props = {k: {"type": "string"} for k in TEXTCHAIN_REASONING[variant]}
+    props.update({"verdict": {"type": "string", "enum": verdict_enum(sensors)},
+                  "fault_type": {"type": "string", "enum": FAULT_TYPES},
+                  "confidence": {"type": "number", "minimum": 0, "maximum": 1}})
+    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+
+
+def textchain_messages(variant: str, lidar: str, visual: str, sensors: list[str]) -> list[dict]:
+    user = (f"Object information (from lidar): {lidar}\nVisual Description: {visual}{TEXTCHAIN_STEPS[variant]}\n\n"
+            f"The vehicle's sensors are: {', '.join(sensors)}. Report which sensor, if any, is abnormal. Return "
+            "JSON with verdict (ok, uncertain, or fault:<sensor>), fault_type, and confidence (0 to 1)"
+            + (" after your reasoning fields." if TEXTCHAIN_REASONING[variant] else "."))
+    return [{"role": "system", "content": TEXTCHAIN_SYSTEM[variant]}, {"role": "user", "content": user}]
