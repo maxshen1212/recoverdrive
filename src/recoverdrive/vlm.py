@@ -1,4 +1,5 @@
-"""Diagnosis agent: an OpenAI-compatible VLM (Qwen3-VL on vLLM by default) that returns schema-checked JSON."""
+"""VLM access: one OpenAI-compatible client (Qwen3-VL on vLLM by default) with schema-constrained JSON and a
+content-addressed cache, plus the prompts of the diagnosis agent ("Ours")."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ import numpy as np
 from openai import OpenAI
 from PIL import Image
 
+from recoverdrive.cache import KVCache, digest, image_digest
 from recoverdrive.types import CheckReport, Diagnosis
 
 SYSTEM_PROMPT = (
@@ -20,6 +22,244 @@ SYSTEM_PROMPT = (
     "code that compares the camera against the LiDAR. Respond only with the requested JSON."
 )
 
+CAMERA_VIEWS = {
+    "CAM_FRONT": "facing forward",
+    "CAM_FRONT_LEFT": "facing front-left",
+    "CAM_FRONT_RIGHT": "facing front-right",
+    "CAM_BACK": "facing backward",
+    "CAM_BACK_LEFT": "facing back-left",
+    "CAM_BACK_RIGHT": "facing back-right",
+}
+
+FAULT_TYPES = ["none", "wrong_viewpoint", "misalignment", "degraded_image", "frozen_image", "point_dropout",
+               "calibration_shift", "lidar_failure", "other"]
+
+
+# --- images and messages -----------------------------------------------------------------------------------
+
+def encode_image(image: np.ndarray, quality: int = 90) -> str:
+    buf = io.BytesIO()
+    Image.fromarray(image).save(buf, format="JPEG", quality=quality)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def image_part(image: np.ndarray, image_id: str | None = None) -> dict:
+    """Placeholder content part; encoded to a data URL only when sent. The cache key uses the digest."""
+    return {"type": "image", "image": image, "digest": image_id or image_digest(image)}
+
+
+def _keyable(messages: list[dict]) -> list:
+    out = []
+    for m in messages:
+        content = m["content"]
+        if isinstance(content, list):
+            content = [{"type": "image", "digest": p["digest"]} if p.get("type") == "image" else p for p in content]
+        out.append({"role": m["role"], "content": content})
+    return out
+
+
+def _encode(messages: list[dict]) -> list:
+    out = []
+    for m in messages:
+        content = m["content"]
+        if isinstance(content, list):
+            content = [{"type": "image_url", "image_url": {"url": encode_image(p["image"])}}
+                       if p.get("type") == "image" else p for p in content]
+        out.append({"role": m["role"], "content": content})
+    return out
+
+
+# --- schema validation -----------------------------------------------------------------------------------
+
+_TYPES = {"string": str, "boolean": bool, "object": dict, "array": list}
+
+
+def validate_json(raw: str, schema: dict) -> dict | None:
+    """Parse `raw` and check it against a flat JSON schema (required, enum, type, min/max); None if invalid."""
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    props = schema.get("properties", {})
+    if any(k not in data for k in schema.get("required", [])):
+        return None
+    if schema.get("additionalProperties") is False and any(k not in props for k in data):
+        return None
+    for key, spec in props.items():
+        if key not in data:
+            continue
+        val = data[key]
+        typ = spec.get("type")
+        if typ in ("number", "integer"):
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                return None
+            if "minimum" in spec and val < spec["minimum"] or "maximum" in spec and val > spec["maximum"]:
+                return None
+        elif typ in _TYPES and not isinstance(val, _TYPES[typ]):
+            return None
+        if "enum" in spec and val not in spec["enum"]:
+            return None
+    return data
+
+
+def to_diagnosis(data: dict | None) -> Diagnosis | None:
+    if data is None:
+        return None
+    return Diagnosis(status=data["status"], sensor=data["sensor"], confidence=float(data["confidence"]),
+                     fault_type=data.get("fault_type"), evidence=str(data.get("evidence", "")))
+
+
+# --- client --------------------------------------------------------------------------------------------------
+
+@dataclass
+class ChatResult:
+    raw: str
+    latency_s: float
+    cached: bool
+
+
+class VLMClient:
+    """All VLM calls go through here, so switching models is a config change only (spec §2.3)."""
+
+    def __init__(self, base_url: str, model: str, temperature: float = 0.0, max_tokens: int = 256,
+                 timeout_s: float = 60, api_key: str = "EMPTY", cache: KVCache | None = None, client=None):
+        self.client = client or OpenAI(base_url=base_url, api_key=api_key, timeout=timeout_s, max_retries=2)
+        self.model = model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.timeout_s = timeout_s
+        self.cache = cache
+
+    def chat_json(self, messages: list[dict], schema: dict, temperature: float = 0.0, seed: int | None = None,
+                  max_tokens: int | None = None, name: str = "output") -> ChatResult:
+        max_tokens = max_tokens or self.max_tokens
+        key = "vlm:" + digest({"model": self.model, "messages": _keyable(messages), "schema": schema,
+                               "temperature": temperature, "seed": seed if temperature > 0 else None,
+                               "max_tokens": max_tokens})
+        if self.cache is not None:
+            hit = self.cache.get(key)
+            if hit is not None:
+                return ChatResult(hit["raw"], hit["latency_s"], cached=True)
+        kwargs = {"seed": seed} if seed is not None else {}
+        t0 = time.perf_counter()
+        resp = self.client.chat.completions.create(
+            model=self.model, messages=_encode(messages), temperature=temperature, max_tokens=max_tokens,
+            response_format={"type": "json_schema", "json_schema": {"name": name, "schema": schema, "strict": True}},
+            **kwargs)
+        latency = time.perf_counter() - t0
+        raw = resp.choices[0].message.content or ""
+        if self.cache is not None:
+            self.cache.set(key, {"raw": raw, "latency_s": latency})
+        return ChatResult(raw, latency, cached=False)
+
+    # E0 interface (scripts/run_e0.py, scripts/smoke_test.py)
+    def diagnose(self, image: np.ndarray, camera: str, summary: str, sensors: list[str]) -> VLMResult:
+        schema = diagnosis_schema(sensors)
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": [image_part(image), {"type": "text", "text": build_user_prompt(camera, summary)}]},
+        ]
+        res = self.chat_json(messages, schema, temperature=self.temperature, name="diagnosis")
+        diagnosis = parse_diagnosis(res.raw, schema)
+        return VLMResult(diagnosis=diagnosis, raw=res.raw, latency_s=res.latency_s, valid=diagnosis is not None)
+
+
+# --- check summary (shared by Ours prompts) --------------------------------------------------------------------
+
+def _fmt_rate(rate: float | None) -> str:
+    return "n/a" if rate is None else f"{rate:.2f}"
+
+
+def summarize_checks(report: CheckReport, max_range: float, iou_threshold: float, min_points: int) -> str:
+    """Plain-text summary of all §4.1 checks for the VLM."""
+    lines = [(f"Camera checks (objects within {max_range:.0f} m that the LiDAR sees, projected into each camera, "
+              f"versus the camera's own detections, IoU >= {iou_threshold}):")]
+    for name, c in report.cameras.items():
+        if c.n_gt == 0:
+            lines.append(f"- {name}: no LiDAR objects expected in view, so it cannot be cross-checked "
+                         f"({c.n_det} camera detections).")
+            continue
+        prev = "n/a" if c.match_rate_delta is None else _fmt_rate(c.match_rate - c.match_rate_delta)
+        lines.append(f"- {name}: {c.n_matched} of {c.n_gt} expected objects matched (match rate "
+                     f"{_fmt_rate(c.match_rate)}, previous frame {prev}); {c.n_det} camera detections.")
+    prev_pts = "n/a" if report.point_count_delta is None else f"{report.point_count - report.point_count_delta}"
+    lidar = [f"LiDAR: {report.point_count} points (previous frame {prev_pts})."]
+    if report.lidar_sector_counts:
+        sc = np.asarray(report.lidar_sector_counts)
+        width = 360 // len(sc)
+        lidar.append(f"Points per {width}-degree sector: min {sc.min()}, median {int(np.median(sc))}.")
+    if report.lidar_visible_ratio is not None:
+        n_seen = round(report.lidar_visible_ratio * report.lidar_n_in_range)
+        lidar.append(f"{n_seen} of {report.lidar_n_in_range} objects within {max_range:.0f} m have >= {min_points} "
+                     f"LiDAR points (ratio {_fmt_rate(report.lidar_visible_ratio)}).")
+    if report.lidar_camera_agreement is not None:
+        lidar.append(f"Of {report.lidar_camera_n} objects confirmed by camera detections, the LiDAR also sees "
+                     f"{_fmt_rate(report.lidar_camera_agreement)}.")
+    lines.append(" ".join(lidar))
+    fault_flags = [f for f in report.flags if not f.endswith(":no_reference")]
+    lines.append("Flags raised by the deterministic checks: " + (", ".join(fault_flags) if fault_flags else "none") + ".")
+    return "\n".join(lines)
+
+
+# --- Ours: diagnosis agent prompt -------------------------------------------------------------------------------
+
+OURS_SYSTEM = (
+    "You are the sensor-health monitor of an autonomous vehicle with six cameras and one roof LiDAR. Each frame you "
+    "get: (1) a mosaic of the current images of all cameras, each tile labeled with its camera name; (2) the same "
+    "mosaic from the previous frame, 0.5 s earlier; (3) a top view of the LiDAR point cloud; and (4) a report from "
+    "deterministic code that cross-checks the LiDAR against the cameras. Decide whether one sensor is faulty. "
+    "Respond only with the requested JSON."
+)
+
+OURS_GUIDE = (
+    "How to decide:\n"
+    "- Each camera tile must show a plausible view for its direction (CAM_FRONT: the road ahead; CAM_BACK: the "
+    "road behind; side cameras: the sides). A tile that shows another camera's view, the same picture as another "
+    "tile, or a view that does not fit its direction is a wrong_viewpoint fault of that camera.\n"
+    "- A tile that is blurred, noisy, overexposed, black, rotated or shifted is a degraded_image or misalignment "
+    "fault. A tile identical to the previous frame while the scene moves is frozen_image.\n"
+    "- A match rate near 1 is healthy. A low match rate with several expected objects, especially with a flag, is "
+    "strong evidence that this camera is faulty. Missing one object is normal (occlusion, darkness, distance).\n"
+    "- A healthy LiDAR has about 34,000 points spread in all directions. Far fewer points, an empty sector in the "
+    "top view, or many camera-confirmed objects without LiDAR points mean a LiDAR fault (point_dropout, "
+    "calibration_shift, or lidar_failure when it is empty).\n"
+    "- Most frames are healthy. Answer status ok when nothing points to a fault, and fault when the evidence points "
+    "to one sensor. Use uncertain only when the evidence conflicts.\n\n"
+    "Return JSON with: evidence (one or two short sentences), status (ok, fault, or uncertain), sensor (the faulty "
+    "sensor, or none), fault_type, and confidence in your status (0 to 1)."
+)
+
+
+def ours_schema(sensors: list[str]) -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "evidence": {"type": "string"},
+            "status": {"type": "string", "enum": ["ok", "fault", "uncertain"]},
+            "sensor": {"type": "string", "enum": [*sensors, "none"]},
+            "fault_type": {"type": "string", "enum": FAULT_TYPES},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        },
+        "required": ["evidence", "status", "sensor", "fault_type", "confidence"],
+        "additionalProperties": False,
+    }
+
+
+def ours_messages(summary: str, mosaic: dict, prev_mosaic: dict | None, bev: dict) -> list[dict]:
+    """`mosaic`, `prev_mosaic`, `bev` are image parts from `image_part`."""
+    content: list[dict] = [{"type": "text", "text": "Image 1: current frame, all cameras."}, mosaic]
+    if prev_mosaic is not None:
+        content += [{"type": "text", "text": "Image 2: previous frame, same layout."}, prev_mosaic]
+    else:
+        content += [{"type": "text", "text": "(No previous frame: this is the first frame.)"}]
+    content += [{"type": "text", "text": "Image 3: LiDAR top view."}, bev,
+                {"type": "text", "text": f"Consistency report:\n{summary}\n\n{OURS_GUIDE}"}]
+    return [{"role": "system", "content": OURS_SYSTEM}, {"role": "user", "content": content}]
+
+
+# --- E0 legacy helpers ----------------------------------------------------------------------------------------
 
 def diagnosis_schema(sensors: list[str]) -> dict:
     return {
@@ -34,12 +274,8 @@ def diagnosis_schema(sensors: list[str]) -> dict:
     }
 
 
-def _fmt_rate(rate: float | None) -> str:
-    return "n/a" if rate is None else f"{rate:.2f}"
-
-
 def summarize_report(report: CheckReport, max_range: float, iou_threshold: float) -> str:
-    """Plain-text summary of a CheckReport for the VLM."""
+    """E0 summary of a CheckReport (single camera)."""
     lines = []
     for name, c in report.cameras.items():
         if c.n_gt == 0:
@@ -60,16 +296,6 @@ def summarize_report(report: CheckReport, max_range: float, iou_threshold: float
     return "\n".join(lines)
 
 
-CAMERA_VIEWS = {
-    "CAM_FRONT": "facing forward",
-    "CAM_FRONT_LEFT": "facing front-left",
-    "CAM_FRONT_RIGHT": "facing front-right",
-    "CAM_BACK": "facing backward",
-    "CAM_BACK_LEFT": "facing back-left",
-    "CAM_BACK_RIGHT": "facing back-right",
-}
-
-
 def build_user_prompt(camera: str, summary: str) -> str:
     view = f" ({CAMERA_VIEWS[camera]})" if camera in CAMERA_VIEWS else ""
     return (
@@ -83,12 +309,6 @@ def build_user_prompt(camera: str, summary: str) -> str:
     )
 
 
-def encode_image(image: np.ndarray, quality: int = 90) -> str:
-    buf = io.BytesIO()
-    Image.fromarray(image).save(buf, format="JPEG", quality=quality)
-    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
-
-
 @dataclass
 class VLMResult:
     diagnosis: Diagnosis | None  # None when the output is not valid JSON for the schema
@@ -97,47 +317,6 @@ class VLMResult:
     valid: bool
 
 
-class VLMClient:
-    def __init__(self, base_url: str, model: str, temperature: float = 0.0, max_tokens: int = 256,
-                 timeout_s: float = 60, api_key: str = "EMPTY"):
-        self.client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout_s)
-        self.model = model
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-
-    def diagnose(self, image: np.ndarray, camera: str, summary: str, sensors: list[str]) -> VLMResult:
-        schema = diagnosis_schema(sensors)
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": encode_image(image)}},
-                {"type": "text", "text": build_user_prompt(camera, summary)},
-            ]},
-        ]
-        t0 = time.perf_counter()
-        resp = self.client.chat.completions.create(
-            model=self.model, messages=messages, temperature=self.temperature, max_tokens=self.max_tokens,
-            response_format={"type": "json_schema",
-                             "json_schema": {"name": "diagnosis", "schema": schema, "strict": True}},
-        )
-        latency = time.perf_counter() - t0
-        raw = resp.choices[0].message.content or ""
-        diagnosis = parse_diagnosis(raw, schema)
-        return VLMResult(diagnosis=diagnosis, raw=raw, latency_s=latency, valid=diagnosis is not None)
-
-
 def parse_diagnosis(raw: str, schema: dict) -> Diagnosis | None:
     """Parse and validate the VLM output against the schema; None if anything is off."""
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    props = schema["properties"]
-    if not isinstance(data, dict) or set(data) != set(schema["required"]):
-        return None
-    if data["status"] not in props["status"]["enum"] or data["sensor"] not in props["sensor"]["enum"]:
-        return None
-    conf = data["confidence"]
-    if not isinstance(conf, (int, float)) or not 0 <= conf <= 1:
-        return None
-    return Diagnosis(status=data["status"], sensor=data["sensor"], confidence=float(conf))
+    return to_diagnosis(validate_json(raw, schema))

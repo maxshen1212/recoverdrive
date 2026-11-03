@@ -14,5 +14,5 @@ exec uv run --project "$PROJECT_ROOT/serving" vllm serve "$MODEL" \
   --host 127.0.0.1 --port "$PORT" \
   --gpu-memory-utilization "${VLM_GPU_UTIL:-0.6}" \
   --max-model-len 16384 \
-  --limit-mm-per-prompt '{"image": 2, "video": 0}' \
+  --limit-mm-per-prompt '{"image": 3, "video": 0}' \
   "$@"
