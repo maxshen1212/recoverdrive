@@ -136,9 +136,13 @@ class ChatResult:
 class VLMClient:
     """All VLM calls go through here, so switching models is a config change only (spec §2.3)."""
 
-    def __init__(self, base_url: str, model: str, temperature: float = 0.0, max_tokens: int = 256,
+    def __init__(self, base_url: str | list[str], model: str, temperature: float = 0.0, max_tokens: int = 256,
                  timeout_s: float = 60, api_key: str = "EMPTY", cache: KVCache | None = None, client=None):
-        self.client = client or OpenAI(base_url=base_url, api_key=api_key, timeout=timeout_s, max_retries=2)
+        """`base_url` may list several servers of the same model; each request goes to one chosen by its key."""
+        urls = [base_url] if isinstance(base_url, str) else list(base_url)
+        self.clients = [client] if client is not None else [
+            OpenAI(base_url=u, api_key=api_key, timeout=timeout_s, max_retries=2) for u in urls]
+        self.client = self.clients[0]
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -166,7 +170,8 @@ class VLMClient:
     def _send(self, key, messages, schema, temperature, seed, max_tokens, name) -> ChatResult:
         kwargs = {"seed": seed} if seed is not None else {}
         t0 = time.perf_counter()
-        resp = self.client.chat.completions.create(
+        server = self.clients[int(key[-8:], 16) % len(self.clients)]
+        resp = server.chat.completions.create(
             model=self.model, messages=_encode(messages), temperature=temperature, max_tokens=max_tokens,
             response_format={"type": "json_schema", "json_schema": {"name": name, "schema": schema, "strict": True}},
             **kwargs)
@@ -186,6 +191,21 @@ class VLMClient:
         res = self.chat_json(messages, schema, temperature=self.temperature, name="diagnosis")
         diagnosis = parse_diagnosis(res.raw, schema)
         return VLMResult(diagnosis=diagnosis, raw=res.raw, latency_s=res.latency_s, valid=diagnosis is not None)
+
+
+def healthy_servers(urls: str | list[str], timeout_s: float = 3.0) -> list[str]:
+    """The base URLs whose /health endpoint answers 200."""
+    import urllib.request
+
+    out = []
+    for u in [urls] if isinstance(urls, str) else urls:
+        try:
+            with urllib.request.urlopen(u.rstrip("/").removesuffix("/v1") + "/health", timeout=timeout_s) as r:
+                if r.status == 200:
+                    out.append(u)
+        except OSError:
+            continue
+    return out
 
 
 # --- check summary (shared by Ours prompts) --------------------------------------------------------------------

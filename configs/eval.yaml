@@ -54,7 +54,8 @@ sam3:
   score_threshold: 0.5
 
 vlm:
-  base_url: http://127.0.0.1:8000/v1
+  # One or more vLLM servers of the same model; unhealthy ones are skipped at start.
+  base_url: [http://127.0.0.1:8000/v1, http://127.0.0.1:8001/v1]
   model: qwen3-vl-8b-instruct
   max_tokens: 256
   timeout_s: 180

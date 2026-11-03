@@ -114,3 +114,13 @@ def test_caller_explicit_attempt_index():
     assert caller.call(_messages(), schema, attempt_idx=2).valid  # index 2 is past the affected attempts
     assert not caller.call(_messages(), schema, attempt_idx=1).valid
     assert caller.attempt == 3
+
+
+def test_chat_json_spreads_requests_over_servers():
+    a, b = FakeOpenAI(), FakeOpenAI()
+    client = VLMClient(["http://a", "http://b"], "m")
+    client.clients = [a, b]
+    schema = ours_schema(SENSORS)
+    for px in range(20):
+        client.chat_json(_messages(seed_px=px), schema)
+    assert len(a.calls) + len(b.calls) == 20 and a.calls and b.calls
