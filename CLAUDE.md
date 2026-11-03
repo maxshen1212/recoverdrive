@@ -17,7 +17,9 @@ Phase 0 (environment) and E0 (pilot) are done; the code covers detect → diagno
 | `serving/` | Separate uv project that only holds vLLM. |
 | `project_proposal.tex` / `.pdf` | Course proposal. The `.tex` is a fragment with no `\documentclass` or preamble, so it does not compile on its own. |
 | `2505.02123v1.pdf` | The DriveAgent paper this project starts from. |
-| `DriveAgent/` | Clone of the upstream DriveAgent code (`origin` = github.com/Paparare/DriveAgent). It is its own git repo; the project root is not a git repo. |
+| `DriveAgent/` | Clone of the upstream DriveAgent code (`origin` = github.com/Paparare/DriveAgent). It is its own git repo. |
+
+The repo (github.com/maxshen1212/recoverdrive, private) tracks code and configs only. `docs/`, `outputs/`, `data/`, the PDFs/`.tex`, and `DriveAgent/` are gitignored and exist only on this server.
 
 ## Commands
 
@@ -37,6 +39,8 @@ uv run python scripts/run_e0.py [--limit N] [--no-vlm]   # E0 -> outputs/e0/<tim
 ```
 
 Stop the vLLM server when you finish; it holds ~24 GB on a shared GPU.
+
+Unattended runs (`/goal`) follow the project skill `.claude/skills/autonomous-run/SKILL.md`: it covers planning without approval, checkpoint commits, deferring minor issues, and when to stop with `BLOCKED:`.
 
 ## Environment gotchas
 
