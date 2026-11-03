@@ -214,7 +214,8 @@ def _fmt_rate(rate: float | None) -> str:
     return "n/a" if rate is None else f"{rate:.2f}"
 
 
-def summarize_checks(report: CheckReport, max_range: float, iou_threshold: float, min_points: int) -> str:
+def summarize_checks(report: CheckReport, max_range: float, iou_threshold: float, min_points: int,
+                     nominal_points: int | None = None) -> str:
     """Plain-text summary of all §4.1 checks for the VLM."""
     lines = [(f"Camera checks (objects within {max_range:.0f} m that the LiDAR sees, projected into each camera, "
               f"versus the camera's own detections, IoU >= {iou_threshold}):")]
@@ -227,7 +228,8 @@ def summarize_checks(report: CheckReport, max_range: float, iou_threshold: float
         lines.append(f"- {name}: {c.n_matched} of {c.n_gt} expected objects matched (match rate "
                      f"{_fmt_rate(c.match_rate)}, previous frame {prev}); {c.n_det} camera detections.")
     prev_pts = "n/a" if report.point_count_delta is None else f"{report.point_count - report.point_count_delta}"
-    lidar = [f"LiDAR: {report.point_count} points (previous frame {prev_pts})."]
+    nominal = f"; nominal for this sensor about {nominal_points}" if nominal_points else ""
+    lidar = [f"LiDAR: {report.point_count} points (previous frame {prev_pts}{nominal})."]
     if report.lidar_sector_counts:
         sc = np.asarray(report.lidar_sector_counts)
         width = 360 // len(sc)
@@ -269,7 +271,7 @@ def suspicious_sensors(report: CheckReport, fault_flags: list[str]) -> str:
 # --- Ours: diagnosis agent prompt -------------------------------------------------------------------------------
 
 OURS_SYSTEM = (
-    "You are the sensor-health monitor of an autonomous vehicle with six cameras and one roof LiDAR. Each frame you "
+    "You are the sensor-health monitor of an autonomous vehicle with several cameras and one roof LiDAR. Each frame you "
     "get: (1) a mosaic of the current images of all cameras, each tile labeled with its camera name; (2) the same "
     "mosaic from the previous frame, 0.5 s earlier; (3) a top view of the LiDAR point cloud; and (4) a report from "
     "deterministic code that cross-checks the LiDAR against the cameras. Decide whether one sensor is faulty. "
@@ -286,8 +288,8 @@ OURS_GUIDE = (
     "unrecognizable from blur or noise, tilted, or the same picture as another tile. Do not report subtle blur, "
     "noise or darkness: night, rain, glare, motion blur and empty roads are normal. Different cameras see different "
     "things; do not judge a camera's direction from content alone.\n"
-    "3. LiDAR top view: about 34,000 points in all directions is healthy; an empty wedge or far fewer points is a "
-    "LiDAR fault.\n"
+    "3. LiDAR top view: about the nominal point count of the report, spread in all directions, is healthy; an empty "
+    "wedge or far fewer points is a LiDAR fault.\n"
     "If no sensor has strong evidence, answer verdict ok with fault_type none. Answer fault:<sensor> only when the "
     "evidence points to that sensor; uncertain only when strong evidence conflicts.\n\n"
     "Return JSON with: verdict (ok, uncertain, or fault:<sensor>), fault_type, confidence in your verdict (0 to 1), "

@@ -1,9 +1,10 @@
 # E1/E2 evaluation (spec §5). Tune prompts and thresholds on dev only; set frozen: true (and commit) before the
 # single test-split run. scripts/run_eval.py refuses --split test otherwise.
-frozen: false
+frozen: true  # frozen after dev calibration (T9); the test split runs once from this commit
 
 data:
   version: v1.0-mini
+  nominal_lidar_points: 34000  # typical clean keyframe of the nuScenes LIDAR_TOP (shown to the VLM)
   cameras: [CAM_FRONT, CAM_FRONT_LEFT, CAM_FRONT_RIGHT, CAM_BACK, CAM_BACK_LEFT, CAM_BACK_RIGHT]
 
 faults:
@@ -19,16 +20,17 @@ checks:
   iou_threshold: 0.3
   min_box_px: 10
 
-# Initial values (spec §4.1 and clean-dev probe); calibrated on dev in Phase 3, then frozen.
+# Calibrated on dev (scripts/calibrate.py, outputs/calib/calib_dev): max correct-sensor recall subject to a
+# clean-frame flag rate <= 0.10 -> flag rate 0.086, correct-sensor recall 0.598 (initial values: 0.204 / 0.619).
 thresholds:
-  match_rate_min: 0.5
+  match_rate_min: 0.4
   min_gt: 2
-  match_drop: 0.5
+  match_drop: 0.9
   min_points: 30000
-  point_drop: 0.3
+  point_drop: 0.1
   n_sectors: 12
-  sector_min_points: 200
-  visible_ratio_min: 0.3
+  sector_min_points: 800
+  visible_ratio_min: 0.0
   agreement_min: 0.5
 
 recovery:

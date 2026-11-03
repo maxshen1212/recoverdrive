@@ -137,7 +137,7 @@ def run_one(spec: RunSpec, env: EvalEnv) -> dict:
             t0 = time.perf_counter()
             check = run_checks(frame, prev_frame, prev_report, dets, check_cfg, thr, cams)
             summary = summarize_checks(check.report, check_cfg.max_range_m, check_cfg.iou_threshold,
-                                       check_cfg.min_points_in_box)
+                                       check_cfg.min_points_in_box, cfg["data"].get("nominal_lidar_points"))
             lat["checks"] = time.perf_counter() - t0
             mosaic = image_part(camera_mosaic({c: frame.cameras[c].image for c in cams}))
             bev = image_part(lidar_bev(points_in_ego(frame)))
@@ -149,10 +149,11 @@ def run_one(spec: RunSpec, env: EvalEnv) -> dict:
                 t0 = time.perf_counter()
                 return m, m.step(ctx), time.perf_counter() - t0
 
-            with ThreadPoolExecutor(len(methods)) as pool:  # methods are independent within a frame
-                for m, out, dt in pool.map(timed, methods):
-                    outputs.update(out)
-                    lat["method:" + "+".join(m.names)] = dt
+            if methods:  # none = checks-only run (calibration)
+                with ThreadPoolExecutor(len(methods)) as pool:  # methods are independent within a frame
+                    for m, out, dt in pool.map(timed, methods):
+                        outputs.update(out)
+                        lat["method:" + "+".join(m.names)] = dt
             event = plan[idx]
             writer.write({
                 "scene": spec.scene, "frame_idx": idx, "run_fault": spec.fault_id, "seed": spec.seed,
