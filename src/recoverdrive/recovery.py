@@ -19,6 +19,11 @@ class RecoveryConfig:
     n_samples: int = 3
     sample_temperature: float = 0.7
     conf_threshold: float = 0.6
+    # Ablation switches (Phase 5). The defaults are the frozen Ours-full.
+    sampling: bool = True  # False: no 3-sample vote; the last valid answer is final
+    reobserve: bool = True  # False: no memory across frames (no persistence promotion, no carried isolation)
+    isolate: bool = True  # False: never isolate a sensor or the agent; any confirmed fault is unresolved
+    gate: str = "none"  # "flags": call the VLM only when a deterministic flag is raised (latency optimization)
 
 
 def vote(diags: list[Diagnosis]) -> tuple[Diagnosis, float]:
@@ -54,6 +59,8 @@ class RecoveryController:
         steps = list(steps)
         tau = self.cfg.conf_threshold
         flagged = set(flagged) - {"agent"}
+        if not self.cfg.reobserve:
+            self.isolated, self.suspected_prev = {}, set()
         conf = 1.0
         if not agent_ok or diag is None:
             steps.append("isolate:agent")
@@ -64,6 +71,12 @@ class RecoveryController:
             suspects, conf = (set(flagged) & {diag.sensor}) or set(flagged), min(diag.confidence, tau - 1e-9)
         else:
             suspects = set()
+
+        if not self.cfg.isolate:  # ablation: nothing can be isolated, so any suspicion or agent failure stops
+            self.suspected_prev = suspects
+            unresolved = bool(suspects) or not agent_ok or diag is None
+            return RecoveryResult(steps_taken=steps, final_state="unresolved" if unresolved else "healthy",
+                                  isolated_sensors=[], final_diagnosis=diag)
 
         # Re-observe: restore isolated sensors that look healthy again.
         for s in sorted(self.isolated):

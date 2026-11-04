@@ -118,3 +118,24 @@ def test_e2_frames_to_recover():
     assert row["unnecessary_clean"] == 0.5 and row["missed_fault"] == pytest.approx(1 / 5)
     assert e2_counts(pairs, with_recovery=False)["rec_success"] is None
     assert recovery_success(*frame(2)) and not recovery_success(*frame(2, iso=("lidar", "camera:CAM_FRONT")))
+
+
+# --- Phase 5 ablation switches ------------------------------------------------------------------------------
+
+def test_controller_no_isolation():
+    rc = RecoveryController(RecoveryConfig(isolate=False))
+    r = rc.step(d("fault", "lidar", 1.0), True, {"lidar"}, [])
+    assert r.final_state == "unresolved" and r.isolated_sensors == [] and shield(r).action == "stop"
+    assert rc.step(None, False, set(), ["reask", "reask"]).final_state == "unresolved"
+    assert rc.step(d("ok"), True, set(), []).final_state == "healthy"
+
+
+def test_controller_no_reobserve():
+    full, ablated = RecoveryController(), RecoveryController(RecoveryConfig(reobserve=False))
+    for rc in (full, ablated):
+        rc.step(d("fault", "lidar", 1.0), True, {"lidar"}, [])
+    assert full.step(d("ok"), True, {"lidar"}, []).isolated_sensors == ["lidar"]  # flag still up: kept isolated
+    assert ablated.step(d("ok"), True, {"lidar"}, []).final_state == "healthy"  # no memory of the isolation
+    weak = RecoveryController(RecoveryConfig(reobserve=False))
+    weak.step(d("fault", "lidar", 1 / 3), True, {"lidar"}, [])
+    assert weak.step(d("fault", "lidar", 1 / 3), True, {"lidar"}, []).final_state == "unresolved"  # never promoted

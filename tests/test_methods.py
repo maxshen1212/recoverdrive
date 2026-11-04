@@ -78,3 +78,21 @@ def test_ours_full_resamples_and_isolates():
 def test_build_methods():
     names = [m.names for m in build_methods(["B0", "B3", "ours_full"], client(), {"recovery": {}})]
     assert names == [("B0",), ("B3",), ("ours_full",)]
+
+
+def test_gate_skips_unflagged_frames():
+    fake = FakeOpenAI({"verdict": "fault:lidar", "fault_type": "point_dropout", "confidence": 0.9, "evidence": "e"})
+    ours = Ours(VLMClient("http://x", "m", client=fake), {"recovery": {"gate": "flags"}})
+    outs = ours.step(make_ctx())
+    assert len(fake.calls) == 0 and outs["ours_full"].action.action == "continue" and outs["ours_full"].n_calls == 0
+    assert not outs["ours_detect"].alarm
+    full = ours.step(make_ctx(flags=["lidar:low_points"]))["ours_full"]
+    assert len(fake.calls) == 4 and full.recovery.isolated_sensors == ["lidar"]
+
+
+def test_no_sampling_uses_first_answer():
+    fault = {"verdict": "fault:lidar", "fault_type": "point_dropout", "confidence": 0.9, "evidence": "e"}
+    ours = Ours(client(fault), {"recovery": {"sampling": False}})
+    full = ours.step(make_ctx(flags=["lidar:low_points"]))["ours_full"]
+    assert full.n_calls == 1 and "resample" not in full.recovery.steps_taken
+    assert full.recovery.isolated_sensors == ["lidar"]

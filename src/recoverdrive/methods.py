@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import ClassVar
@@ -81,6 +82,21 @@ def same_verdict(a: Diagnosis | None, b: dict | None) -> bool:
     return a.status == ref.status and (a.status == "ok" or a.sensor == ref.sensor)
 
 
+def full_outcome(result: RecoveryResult, steps: list[str], diag: Diagnosis | None) -> tuple[bool, str]:
+    """E1 alarm and blamed sensor of Ours-full (shared by the method and the offline ablation replay)."""
+    isolated = [s for s in result.isolated_sensors if s != "agent"]
+    reasked = "reask" in steps  # a bad agent output was noticed, even if re-asking then fixed it
+    if result.final_state == "healthy":
+        pred = "agent" if reasked else "none"
+    elif isolated:
+        pred = isolated[0]
+    elif "agent" in result.isolated_sensors:
+        pred = "agent"
+    else:
+        pred = diag.sensor if diag is not None else "agent"
+    return result.final_state != "healthy" or reasked, pred
+
+
 def no_recovery_output(diag: Diagnosis | None, valid: bool, **kw) -> MethodOutput:
     alarm, sensor = detect_output(diag, valid)
     result = no_recovery(diag, valid)
@@ -109,7 +125,12 @@ class Ours:
 
     def step(self, ctx: FrameContext) -> dict[str, MethodOutput]:
         self.caller.new_frame(ctx.agent_fault)
+        flagged = flagged_sensors(ctx.check.report.flags) - {"agent"}
+        if self.rcfg.gate == "flags" and not flagged:  # §4.2 latency optimization: no flag, no VLM call
+            return self._gated(ctx)
+        timing: dict[str, float] = {}
         first = self.diagnose(ctx)
+        timing["vlm_first"] = first.latency_s
         outputs = {}
         if "ours_detect" in self.names:
             outputs["ours_detect"] = no_recovery_output(to_diagnosis(first.data), first.valid, n_calls=1,
@@ -122,11 +143,12 @@ class Ours:
         while not attempts[-1].valid and len(attempts) <= self.rcfg.max_reask:  # 1. re-ask on bad format
             steps.append("reask")
             attempts.append(self.diagnose(ctx))
+        timing["vlm_reask"] = sum(a.latency_s for a in attempts[1:])
         valid = attempts[-1].valid
         diag = to_diagnosis(attempts[-1].data)
-        flagged = flagged_sensors(ctx.check.report.flags) - {"agent"}
         samples: list[Attempt] = []
-        if valid and (diag.status != "ok" or flagged):  # suspected fault: sample and vote
+        t0 = time.perf_counter()
+        if self.rcfg.sampling and valid and (diag.status != "ok" or flagged):  # suspected fault: sample and vote
             steps.append("resample")
             base = len(attempts)
             with ThreadPoolExecutor(self.rcfg.n_samples) as pool:
@@ -136,28 +158,37 @@ class Ours:
             voted = [to_diagnosis(a.data) for a in samples if a.valid]
             if voted:
                 diag, _ = vote(voted)
+        timing["vlm_samples"] = time.perf_counter() - t0 if samples else 0.0
+        t0 = time.perf_counter()
         result = self.controller.step(diag if valid else None, valid, flagged, steps)  # 2-3. re-observe, isolate
         action = shield(result)
-        isolated = [s for s in result.isolated_sensors if s != "agent"]
-        reasked = "reask" in steps  # a bad agent output was noticed, even if re-asking then fixed it
-        if result.final_state == "healthy":
-            pred = "agent" if reasked else "none"
-        elif isolated:
-            pred = isolated[0]
-        elif "agent" in result.isolated_sensors:
-            pred = "agent"
-        else:
-            pred = diag.sensor if diag is not None else "agent"
+        timing["recovery"] = time.perf_counter() - t0
+        alarm, pred = full_outcome(result, steps, diag)
         extra = {"attempts": [attempt_record(a) for a in attempts], "samples": [attempt_record(a) for a in samples],
-                 "flagged": sorted(flagged)}
+                 "flagged": sorted(flagged), "timing": timing}
         if ctx.agent_fault is not None and ctx.agent_fault.fault_id in AGENT_FAULTS:
             # Spec §5.2: recovered if the final answer is valid and matches the fault-free answer.
             extra["agent_recovered"] = valid and same_verdict(diag, first.clean_data)
         all_calls = attempts + samples
         outputs["ours_full"] = MethodOutput(
-            diag if valid else None, valid, result.final_state != "healthy" or reasked, pred, recovery=result,
-            action=action,
+            diag if valid else None, valid, alarm, pred, recovery=result, action=action,
             n_calls=len(all_calls), latency_s=sum(a.latency_s for a in all_calls), extra=extra)
+        return outputs
+
+    def _gated(self, ctx: FrameContext) -> dict[str, MethodOutput]:
+        """No flag and the gate is on: the frame is treated as healthy without calling the VLM."""
+        diag = Diagnosis(status="ok", sensor="none", confidence=1.0, fault_type="none", evidence="gated: no flag")
+        outputs = {}
+        if "ours_detect" in self.names:
+            outputs["ours_detect"] = no_recovery_output(diag, True, extra={"gated": True})
+        if "ours_full" in self.names:
+            result = self.controller.step(diag, True, set(), ["gated"])
+            alarm, pred = full_outcome(result, ["gated"], diag)
+            extra = {"gated": True, "timing": {"vlm_first": 0.0, "vlm_reask": 0.0, "vlm_samples": 0.0}}
+            if ctx.agent_fault is not None:
+                extra["agent_recovered"] = True  # no call was made, so the fault had no effect
+            outputs["ours_full"] = MethodOutput(diag, True, alarm, pred, recovery=result, action=shield(result),
+                                                extra=extra)
         return outputs
 
 
