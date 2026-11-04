@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RecoverDrive is a course term project. It builds a fault-aware monitor for autonomous driving that runs detect → diagnose → recover → verify → fallback. The presentation is due Dec 1, 2026 and the final report Dec 10, 2026.
 
-Phase 0 (environment) and E0 (pilot) are done; the code covers detect → diagnose only (no recovery, shield, baselines, or CARLA yet).
+Phases 0–5 are done: the full detect → diagnose → recover → verify → fallback pipeline, baselines B0–B3, the nuScenes evaluation (E1/E2, test split run once from frozen commit `5d5283c`), CARLA closed loop (E3), latency (E4) and ablation (E5). Results are in `REPORT.md`. Phase 6 (slides, demo video) remains.
 
 | Path | What it is |
 |---|---|
@@ -15,11 +15,12 @@ Phase 0 (environment) and E0 (pilot) are done; the code covers detect → diagno
 | `configs/` | `splits.yaml` (fixed dev/test scene split) and per-experiment configs such as `e0.yaml`. |
 | `scripts/` | Shell helpers and experiment entry points. |
 | `serving/` | Separate uv project that only holds vLLM. |
-| `project_proposal.tex` / `.pdf` | Course proposal. The `.tex` is a fragment with no `\documentclass` or preamble, so it does not compile on its own. |
-| `2505.02123v1.pdf` | The DriveAgent paper this project starts from. |
-| `DriveAgent/` | Clone of the upstream DriveAgent code (`origin` = github.com/Paparare/DriveAgent). It is its own git repo. |
+| `REPORT.md`, `report_figures/` | Experiment report for Phases 1–5 and its figures/tables (built by `scripts/make_figures.py`). |
+| `project_proposal.tex` / `.pdf` | Local only (not tracked). Course proposal. The `.tex` is a fragment with no `\documentclass` or preamble, so it does not compile on its own. |
+| `2505.02123v1.pdf` | Local only (not tracked). The DriveAgent paper this project starts from: https://arxiv.org/abs/2505.02123 |
+| `DriveAgent/` | Local only (not tracked). Clone of the upstream DriveAgent code (`origin` = github.com/Paparare/DriveAgent). It is its own git repo. |
 
-The repo (github.com/maxshen1212/recoverdrive, private) tracks code and configs only. `docs/`, `outputs/`, `data/`, the PDFs/`.tex`, and `DriveAgent/` are gitignored and exist only on this server.
+The repo (github.com/maxshen1212/recoverdrive, private) tracks code, configs, `docs/` (design spec, plans, run logs) and the report. `outputs/`, `data/`, the PDFs/`.tex`, and `DriveAgent/` are gitignored and exist only on this server.
 
 ## Commands
 
@@ -54,7 +55,7 @@ Unattended runs (`/goal`) follow the project skill `.claude/skills/autonomous-ru
 
 - `types.py`: the spec §2.2 dataclasses. Each camera and the LiDAR carry their own `ego_pose`, because sensor timestamps differ and projection needs the pose at each sensor's own time.
 - `adapters/nuscenes.py`: builds a `Frame` for a scene keyframe. GT boxes are stored in the global frame, and only categories mapped in the config are kept.
-- `faults.py`: seeded fault episodes (at least 2 frames each, with a clean frame between episodes) and the injectors. Only C1 is implemented so far.
+- `faults.py`: seeded fault episodes (at least 2 frames each, with a clean frame between episodes) and the injectors for C1–C4, L1, L2, L4; A1–A3 are applied to agent calls in `agent.py`. L3 is not implemented.
 - `geometry.py`: transforms, points-in-box counts, and 3D → 2D projection with near-plane clipping.
 - `checks.py`: IoU, one-to-one Hungarian matching (class-agnostic), and building the `CheckReport`. `match_rate` is `None` when no GT boxes project into the camera.
 - `detectors/sam3.py`: SAM 3 detector that runs all text prompts in one batched pass.
@@ -62,10 +63,13 @@ Unattended runs (`/goal`) follow the project skill `.claude/skills/autonomous-ru
 - `pipeline.py`: `DetectDiagnosePipeline.step` runs one frame and records per-component latency.
 - `build.py`: builds the components from a YAML config.
 - `recording.py`: JSONL logs, Rerun output, and overlay PNGs.
+- `cache.py` (SQLite cache for SAM 3 and VLM results), `render.py` (camera mosaic, LiDAR top view), `agent.py` (diagnosis-call wrapper with agent-fault injection), `recovery.py` (re-ask, vote, re-observe, isolate, verify), `shield.py` (rule-based actions and the acceptable-action labels), `methods.py` (B0–B3, Ours-detect, Ours-full), `metrics.py` (E1/E2), `runner.py` (parallel, resumable evaluation runs), `detectors/qwen_grounding.py` (E5 ablation), `adapters/carla_adapter.py` (CARLA → `Frame`).
+- `pipeline.py` and `build.py` serve the E0 scripts only.
+- Scripts: `run_eval.py` (E1/E2 and the online ablations), `calibrate.py`, `run_e3.py` + `carla_server.sh` (CARLA), `latency_report.py` (E4), `replay_ablation.py` (offline E5 ablations), `make_figures.py` (report figures/tables).
 
 ## DriveAgent/ (upstream reference)
 
-Treat it as read-only reference. The spec does not try to reproduce the paper's numbers: the code does not run, and part of the data (R2/R3) was never released. Released data: Hugging Face dataset `Parechan/driveagent`.
+Upstream: https://github.com/Paparare/DriveAgent (the file names below refer to that repo; the local clone is not tracked). Treat it as read-only reference. The spec does not try to reproduce the paper's numbers: the code does not run, and part of the data (R2/R3) was never released. Released data: Hugging Face dataset `Parechan/driveagent`.
 
 How it works:
 - Two scripts, each an LLM text chain over "bags": folders named `hou-*` under `--data-root`, each with `bag_information/object_descriptions.csv` and images in `img/`.

@@ -82,7 +82,7 @@ When all tasks are checkpointed and the target's completion criteria pass:
 - Background work: /goal skips evaluation while background work is running. Short jobs with `run_in_background` are fine because they finish. Long-lived servers must run detached:
   `setsid nohup env CUDA_VISIBLE_DEVICES=<gpu> VLM_GPU_UTIL=0.5 ./scripts/serve_vlm.sh > outputs/logs/vllm.log 2>&1 &`
   Then poll `http://127.0.0.1:8000/health`. To stop it: `pkill -INT -f "vllm serve"`.
-- Plans and run logs live in `docs/`, which is gitignored on purpose. Do not force-add them.
+- Plans and run logs live in `docs/superpowers/` and are tracked: they go into the checkpoint commits.
 
 ## Run log template
 ```markdown
