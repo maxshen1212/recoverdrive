@@ -19,6 +19,7 @@ from pathlib import Path
 import carla
 import numpy as np
 import yaml
+from PIL import Image, ImageDraw
 
 from recoverdrive.adapters.carla_adapter import (
     DEFAULT_CAMERAS,
@@ -122,8 +123,15 @@ class EgoController:
 
 
 class Sensors:
-    def __init__(self, world, ego, bp):
+    def __init__(self, world, ego, bp, record: bool = False):
         self.actors, self.queues = [], {}
+        if record:  # third-person camera for demo videos only; the monitor never sees it
+            cbp = bp.find("sensor.camera.rgb")
+            cbp.set_attribute("image_size_x", "960")
+            cbp.set_attribute("image_size_y", "540")
+            cbp.set_attribute("fov", "90")
+            tf = carla.Transform(carla.Location(x=-7.5, z=3.5), carla.Rotation(pitch=-14))
+            self._add(world.spawn_actor(cbp, tf, attach_to=ego), "CHASE")
         for spec in DEFAULT_CAMERAS:
             cbp = bp.find("sensor.camera.rgb")
             cbp.set_attribute("image_size_x", str(spec.width))
@@ -235,7 +243,7 @@ def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, 
     actors = []
     ego = world.spawn_actor(bp.find("vehicle.lincoln.mkz_2020"), route_tf)
     actors.append(ego)
-    sensors = Sensors(world, ego, bp)
+    sensors = Sensors(world, ego, bp, record=args.record)
     drive = EgoController(cmap)
     start = np.array([route_tf.location.x, route_tf.location.y])
     heading = np.array([np.cos(np.radians(route_tf.rotation.yaw)), np.sin(np.radians(route_tf.rotation.yaw))])
@@ -268,6 +276,13 @@ def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, 
     writer = JsonlWriter(out_dir / f"{name}.jsonl")
     action = Action("continue", "start")
     ttc_brake = False
+    collided_tick = None
+    hud = {"fault": False, "state": "healthy", "isolated": [], "action": "continue", "ttc_brake": False}
+    last_front = None
+    frames_dir = out_dir / f"{name}_frames"
+    frame_log = []
+    if args.record:
+        frames_dir.mkdir(parents=True, exist_ok=True)
     prev_frame = prev_report = prev_mosaic = None
     triggered_at = None
     steps, t0 = 0, time.perf_counter()
@@ -280,8 +295,10 @@ def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, 
         data = sensors.get(frame_id)
         loc = ego.get_location()
         progress = float((np.array([loc.x, loc.y]) - start) @ heading)
-        if sensors.collisions:
+        if sensors.collisions and collided_tick is None:
             result.update(collision=True, collision_with=sensors.collisions[0])
+            collided_tick = tick
+        if collided_tick is not None and (not args.record or tick - collided_tick >= 15):
             break
         if progress >= args.route_m:
             break
@@ -329,6 +346,9 @@ def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, 
             ttc = ttc_of(frame, perceived, vel, np.array([v.x, -v.y, v.z]))
             action = ttc_override(out.action, ttc, args.ttc_s)
             ttc_brake = action.reason.startswith("TTC")
+            hud = {"fault": label.fault_id != "none", "state": out.recovery.final_state if out.recovery else "healthy",
+                   "isolated": [s for s in isolated if s != "agent"], "action": action.action, "ttc_brake": ttc_brake}
+            last_front = frame.cameras["CAM_FRONT"].image
             writer.write({"step": steps, "tick": tick, "progress_m": round(progress, 2), "label": label,
                           "monitor_action": out.action.action, "action": action.action, "reason": action.reason,
                           "ttc": ttc, "isolated": isolated, "state": out.recovery.final_state if out.recovery else None,
@@ -341,7 +361,17 @@ def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, 
             ego.apply_control(drive(ego, 0.0, brake=1.0 if ttc_brake else 0.6))
         else:
             ego.apply_control(drive(ego, args.cruise_kmh if action.action == "continue" else args.slow_kmh))
+        if args.record and "CHASE" in data:
+            v = ego.get_velocity()
+            img = demo_frame(bgra_to_rgb(data["CHASE"].raw_data, data["CHASE"].width, data["CHASE"].height),
+                             last_front, hud, method_name, tick * args.dt, float(np.hypot(v.x, v.y)) * 3.6,
+                             collided_tick is not None)
+            img.save(frames_dir / f"{tick:04d}.jpg", quality=90)
+            frame_log.append({"tick": tick, "t": round(tick * args.dt, 2), "fault": hud["fault"],
+                              "collision": collided_tick is not None, "progress_m": round(progress, 2)})
     writer.close()
+    if args.record:
+        (frames_dir / "frames.json").write_text(json.dumps(frame_log))
     sensors.destroy()
     for a in actors:
         if a.is_alive:
@@ -355,6 +385,37 @@ def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, 
                   sim_s=round((tick + 1) * args.dt, 1))
     done.write_text(json.dumps(result))
     return result
+
+
+def demo_frame(chase: np.ndarray, front: np.ndarray | None, hud: dict, method: str, t: float, kmh: float,
+               collided: bool) -> Image.Image:
+    """Chase-camera frame with the front camera inset and a status overlay (demo videos only)."""
+    img = Image.fromarray(chase).resize((800, 450), Image.BILINEAR)
+    draw = ImageDraw.Draw(img, "RGBA")
+    if front is not None:
+        inset = Image.fromarray(front).resize((256, 144), Image.BILINEAR)
+        img.paste(inset, (800 - 256 - 10, 10))
+        draw.rectangle([800 - 256 - 11, 9, 800 - 10, 154], outline=(255, 255, 255, 255), width=2)
+        draw.rectangle([800 - 256 - 10, 154, 800 - 10, 176], fill=(0, 0, 0, 170))
+        draw.text((800 - 256 - 4, 157), "front camera (what the car sees)", fill=(255, 255, 255), font_size=14)
+    title = "No monitor (B0)" if method == "B0" else ("RecoverDrive (Ours-full)" if method == "ours_full" else method)
+    if method == "B0":
+        monitor = "monitor: none"
+    else:
+        monitor = f"monitor: {hud['state']}" + (f", isolated {', '.join(i.split(':')[-1] for i in hud['isolated'])}"
+                                                if hud["isolated"] else "")
+    action = hud["action"].replace("_", " ") + ("  (emergency brake)" if hud["ttc_brake"] else "")
+    lines = [(title, (255, 255, 255)), (f"t = {t:4.1f} s    speed {kmh:4.1f} km/h", (230, 230, 230)),
+             ("front camera fault: ON" if hud["fault"] else "front camera fault: off",
+              (255, 140, 60) if hud["fault"] else (230, 230, 230)),
+             (monitor, (230, 230, 230)), (f"action: {action}", (230, 230, 230))]
+    draw.rectangle([10, 10, 372, 22 + 24 * len(lines)], fill=(0, 0, 0, 170))
+    for k, (text, color) in enumerate(lines):
+        draw.text((18, 16 + 24 * k), text, fill=color, font_size=19 if k == 0 else 17)
+    if collided:
+        draw.rectangle([0, 190, 800, 260], fill=(200, 30, 30, 200))
+        draw.text((300, 203), "COLLISION", fill=(255, 255, 255), font_size=40)
+    return img
 
 
 def deep_merge(base: dict, over: dict) -> dict:
@@ -415,6 +476,8 @@ def main():
     p.add_argument("--tm-port", type=int, default=TM_PORT, help="one per process when several CARLA servers run")
     p.add_argument("--vlm-url", nargs="*", default=None, help="override the VLM server list of the config")
     p.add_argument("--summarize", action="store_true", help="only build the table from finished runs of --tag")
+    p.add_argument("--only-route", type=int, default=None, help="run a single route index (demos)")
+    p.add_argument("--record", action="store_true", help="save chase-camera frames with an overlay (demo videos)")
     args = p.parse_args()
     if args.summarize:
         out_dir = Path("outputs/e3") / args.tag
@@ -453,6 +516,8 @@ def main():
     try:
         for seed in args.seeds:
             for i, tf in enumerate(routes):
+                if args.only_route is not None and i != args.only_route:
+                    continue
                 for cond in args.conditions:
                     for m in args.methods:
                         try:

@@ -3,7 +3,22 @@
 A fault-aware monitor for autonomous-driving perception: **detect → diagnose → recover → verify → fallback**.
 Deterministic checks compare the LiDAR with six cameras, Qwen3-VL decides which sensor is faulty, a recovery
 controller isolates it, and a rule-based shield picks *continue*, *slow_down* or *stop*. Evaluated on nuScenes-mini
-with injected faults and in CARLA.
+with injected faults and in CARLA. The project builds on DriveAgent ([Hou et al., 2025](https://arxiv.org/abs/2505.02123));
+its text-chain reasoning is re-implemented here as baselines B1–B3.
+
+## Demo
+
+CARLA, same route and seed. While a pedestrian crosses, the front camera shows the rear view (fault C1); the inset
+shows what the car sees. Playback at 2× speed.
+
+| No monitor (B0) | RecoverDrive (Ours-full) |
+|---|---|
+| ![No monitor: the car hits the pedestrian](docs/media/demo_b0.gif) | ![RecoverDrive: the car slows down and passes safely](docs/media/demo_ours_full.gif) |
+| The car does not see the pedestrian and hits them. | On the first faulty frame the monitor flags the front camera, isolates it and slows to about 8 km/h; the pedestrian has crossed before the car arrives. |
+
+These are example runs. Around 20 s the monitor briefly restores the camera, because nothing is in view to cross-check,
+and then isolates it again. Over all 72 closed-loop runs, the car collided in 7 of 12 runs with this fault without the
+monitor and in 0 of 12 with it.
 
 ## Requirements
 
@@ -125,5 +140,19 @@ The CARLA Python client is installed by `uv sync`. `carla_server.sh` needs the N
 | E5 component ablations | add `--ablation no_checks` or `--ablation qwen_grounding` to the main-experiment command, with `--methods ours_detect ours_full` |
 | E5 model ablations | serve the model with `VLM_MODEL=Qwen/Qwen3-VL-4B-Instruct VLM_SERVED_NAME=qwen3-vl-4b-instruct VLM_GPU_UTIL=0.4 ./scripts/serve_vlm.sh`, then add `--vlm-model qwen3-vl-4b-instruct` (Thinking: `Qwen/Qwen3-VL-8B-Thinking`, served with `--reasoning-parser qwen3`, run with `--vlm-max-tokens 4096`) |
 | Figures and tables | `uv run python scripts/make_figures.py` (writes `report_figures/`) |
+| Demo GIFs | `uv run python scripts/run_e3.py --methods B0 ours_full --conditions C1 --seeds 0 --only-route 1 --record --tag demo`, then `uv run python scripts/make_demo_gif.py outputs/e3/demo/<run>_frames docs/media/<name>.gif --start 3 --end 24` |
 
 Results go to `outputs/` and `report_figures/` (not tracked). Lint: `uv run ruff check src tests scripts`.
+
+## Citation
+
+This project builds on DriveAgent:
+
+```bibtex
+@article{hou2025driveagent,
+  title   = {DriveAgent: Multi-Agent Structured Reasoning with LLM and Multimodal Sensor Fusion for Autonomous Driving},
+  author  = {Hou, Xinmeng and Wang, Wuqi and Yang, Long and Lin, Hao and Feng, Jinglun and Min, Haigen and Zhao, Xiangmo},
+  journal = {arXiv preprint arXiv:2505.02123},
+  year    = {2025}
+}
+```
