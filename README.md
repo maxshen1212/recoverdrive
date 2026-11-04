@@ -3,7 +3,7 @@
 A fault-aware monitor for autonomous-driving perception: **detect → diagnose → recover → verify → fallback**.
 Deterministic checks compare the LiDAR with six cameras, Qwen3-VL decides which sensor is faulty, a recovery
 controller isolates it, and a rule-based shield picks *continue*, *slow_down* or *stop*. Evaluated on nuScenes-mini
-with injected faults and in CARLA. Results: [`REPORT.md`](REPORT.md).
+with injected faults and in CARLA.
 
 ## Requirements
 
@@ -28,7 +28,6 @@ configs/            eval.yaml (frozen settings), splits.yaml (dev/test scenes), 
 serving/            separate uv project that only holds vLLM
 tests/              unit tests (pytest)
 docs/superpowers/   design spec (in Traditional Chinese), plans, run logs
-REPORT.md           results of all experiments; figures and tables in report_figures/
 ```
 
 ## Setup
@@ -84,9 +83,9 @@ uv run python scripts/run_eval.py --split test --faults all \
 | Dev split, faults C1/L1/A1 | `uv run python scripts/run_eval.py --split dev --faults C1 L1 A1 --methods ours_detect --seeds 0 --tag p1` |
 | Threshold calibration (dev) | `uv run python scripts/calibrate.py --tag calib_dev` |
 | E3 closed loop (CARLA) | `CARLA_ROOT=<path to CARLA_0.9.16> ./scripts/carla_server.sh &`, then `uv run python scripts/run_e3.py --seeds 0 1 2 --tag e3_final` |
-| E4 latency | see [`REPORT.md` §10](REPORT.md#10-reproduce), then `uv run python scripts/latency_report.py` |
+| E4 latency | two controlled runs tagged `e4_ours` / `e4_baselines` with `--workers 1 --sequential --no-precompute --cache <new file>`, then `uv run python scripts/latency_report.py` |
 | E5 recovery ablations (offline) | `uv run python scripts/replay_ablation.py --tag test_final` |
 | E5 component ablations | add `--ablation no_checks` / `qwen_grounding`, or `--vlm-model` to the test command |
-| Figures and tables | `uv run python scripts/make_figures.py` |
+| Figures and tables | `uv run python scripts/make_figures.py` (writes `report_figures/`) |
 
-Results go to `outputs/` (not tracked). Lint: `uv run ruff check src tests scripts`.
+Results go to `outputs/` and `report_figures/` (not tracked). Lint: `uv run ruff check src tests scripts`.

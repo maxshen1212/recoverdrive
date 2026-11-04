@@ -20,7 +20,7 @@ checks:
   iou_threshold: 0.3
   min_box_px: 10
 
-# Calibrated on dev (scripts/calibrate.py, outputs/calib/calib_dev): max correct-sensor recall subject to a
+# Calibrated on dev with scripts/calibrate.py: max correct-sensor recall subject to a
 # clean-frame flag rate <= 0.10 -> flag rate 0.086, correct-sensor recall 0.598 (initial values: 0.204 / 0.619).
 thresholds:
   match_rate_min: 0.4

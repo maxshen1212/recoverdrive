@@ -406,7 +406,7 @@ def parse_diagnosis(raw: str, schema: dict) -> Diagnosis | None:
     return to_diagnosis(validate_json(raw, schema))
 
 
-# --- B1-B3: DriveAgent-style text chain (prompts from DriveAgent/vehicle_prompts.json) --------------------------
+# --- B1-B3: DriveAgent-style text chain (prompts from github.com/Paparare/DriveAgent, vehicle_prompts.json) --------------------------
 
 CAPTION_SYSTEM = (
     "You are a visual perception assistant for an autonomous vehicle. Describe what this camera image shows "

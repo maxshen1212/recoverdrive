@@ -1,6 +1,10 @@
 # Results and run logs
 outputs/
 
+# Experiment report and its figures (kept local)
+REPORT.md
+report_figures/
+
 # Datasets
 data/
 

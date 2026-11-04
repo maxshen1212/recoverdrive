@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RecoverDrive is a course term project. It builds a fault-aware monitor for autonomous driving that runs detect → diagnose → recover → verify → fallback. The presentation is due Dec 1, 2026 and the final report Dec 10, 2026.
 
-Phases 0–5 are done: the full detect → diagnose → recover → verify → fallback pipeline, baselines B0–B3, the nuScenes evaluation (E1/E2, test split run once from frozen commit `5d5283c`), CARLA closed loop (E3), latency (E4) and ablation (E5). Results are in `REPORT.md`. Phase 6 (slides, demo video) remains.
+Phases 0–5 are done: the full detect → diagnose → recover → verify → fallback pipeline, baselines B0–B3, the nuScenes evaluation (E1/E2, test split run once from frozen commit `5d5283c`), CARLA closed loop (E3), latency (E4) and ablation (E5). Results are in `REPORT.md` (local only, not tracked). Phase 6 (slides, demo video) remains.
 
 | Path | What it is |
 |---|---|
@@ -15,12 +15,12 @@ Phases 0–5 are done: the full detect → diagnose → recover → verify → f
 | `configs/` | `splits.yaml` (fixed dev/test scene split) and per-experiment configs such as `e0.yaml`. |
 | `scripts/` | Shell helpers and experiment entry points. |
 | `serving/` | Separate uv project that only holds vLLM. |
-| `REPORT.md`, `report_figures/` | Experiment report for Phases 1–5 and its figures/tables (built by `scripts/make_figures.py`). |
+| `REPORT.md`, `report_figures/` | Local only (not tracked). Experiment report for Phases 1–5 and its figures/tables (built by `scripts/make_figures.py`). |
 | `project_proposal.tex` / `.pdf` | Local only (not tracked). Course proposal. The `.tex` is a fragment with no `\documentclass` or preamble, so it does not compile on its own. |
 | `2505.02123v1.pdf` | Local only (not tracked). The DriveAgent paper this project starts from: https://arxiv.org/abs/2505.02123 |
 | `DriveAgent/` | Local only (not tracked). Clone of the upstream DriveAgent code (`origin` = github.com/Paparare/DriveAgent). It is its own git repo. |
 
-The repo (github.com/maxshen1212/recoverdrive, private) tracks code, configs, `docs/` (design spec, plans, run logs) and the report. `outputs/`, `data/`, the PDFs/`.tex`, and `DriveAgent/` are gitignored and exist only on this server.
+The repo (github.com/maxshen1212/recoverdrive, private) tracks code, configs, `docs/` (design spec, plans, run logs). `outputs/`, `REPORT.md`, `report_figures/`, `data/`, the PDFs/`.tex`, and `DriveAgent/` are gitignored and exist only on this server.
 
 ## Commands
 

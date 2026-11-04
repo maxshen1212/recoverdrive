@@ -1,4 +1,4 @@
-"""Figures and summary tables for REPORT.md (Phases 1-5). Reads finished runs; writes report_figures/.
+"""Figures and summary tables of all experiments. Reads finished runs; writes report_figures/ (not tracked).
 
 Colors: the dataviz reference palette (light surface), categorical slots 1-4 in their validated order, the blue
 sequential ramp for the heatmap; every mark carries a value label, so identity never relies on color alone.
