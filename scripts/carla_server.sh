@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start the CARLA 0.9.16 server headless (spec §1.4: -RenderOffScreen). Stop it with:
-#   pkill -INT -f CarlaUE4-Linux-Shipping
+#   pkill -INT -f "[C]arlaUE4-Linux-Shipping"   (the brackets stop pkill from matching its own shell)
 # The server has Mesa Vulkan drivers next to NVIDIA's; without VK_ICD_FILENAMES the render thread can pick a
 # non-NVIDIA device and hang ("GameThread timed out waiting for RenderThread"). Vulkan adapter numbering differs
 # from CUDA's: check `nvidia-smi` after start to see which GPU it uses.

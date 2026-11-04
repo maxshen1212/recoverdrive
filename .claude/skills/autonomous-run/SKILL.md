@@ -81,7 +81,7 @@ When all tasks are checkpointed and the target's completion criteria pass:
 - Use dev scenes only (`configs/splits.yaml`). Never edit the spec; propose spec changes as deferred questions or BLOCKED.
 - Background work: /goal skips evaluation while background work is running. Short jobs with `run_in_background` are fine because they finish. Long-lived servers must run detached:
   `setsid nohup env CUDA_VISIBLE_DEVICES=<gpu> VLM_GPU_UTIL=0.5 ./scripts/serve_vlm.sh > outputs/logs/vllm.log 2>&1 &`
-  Then poll `http://127.0.0.1:8000/health`. To stop it: `pkill -INT -f "vllm serve"`.
+  Then poll `http://127.0.0.1:8000/health`. To stop it: `pkill -INT -f "[v]llm serve"` (the brackets stop pkill from matching your own shell, whose command line contains the pattern).
 - Plans and run logs live in `docs/superpowers/` and are tracked: they go into the checkpoint commits.
 
 ## Run log template

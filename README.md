@@ -85,7 +85,8 @@ uv run python scripts/run_eval.py --split dev --scenes scene-0061 --faults C1 \
     --methods B0 ours_detect ours_full --seeds 0 --tag quick
 ```
 
-It prints the E1 (detection) and E2 (fallback) tables and saves them to `outputs/eval/quick/summary.md`.
+It prints the E1 (detection) and E2 (fallback) tables and saves them to `outputs/eval/quick/summary.md`. This is a
+smoke test: a single scene gives very different numbers from the full evaluation.
 
 **3. Main experiment** (test split, all methods and faults, 3 seeds; ~3 h with two VLM servers, ~6 h with one):
 
@@ -98,7 +99,7 @@ uv run python scripts/run_eval.py --split test --faults all \
 - Runs are resumable: rerun the same command to finish missing runs.
 - For a second server, start another one with `VLM_PORT=8001` on another GPU; servers that are not running are skipped.
 
-**4. Stop the server** when done: `pkill -INT -f "vllm serve"`
+**4. Stop the server** when done: `pkill -INT -f "[v]llm serve"`
 
 ## Closed-loop experiment in CARLA (optional, E3)
 
@@ -107,7 +108,7 @@ wget https://carla-releases.s3.us-east-005.backblazeb2.com/Linux/CARLA_0.9.16.ta
 mkdir -p ~/carla/CARLA_0.9.16 && tar xzf CARLA_0.9.16.tar.gz -C ~/carla/CARLA_0.9.16
 CARLA_ROOT=~/carla/CARLA_0.9.16 ./scripts/carla_server.sh > carla.log 2>&1 &              # headless, ~5 GB GPU
 uv run python scripts/run_e3.py --seeds 0 1 2 --tag e3_final                              # VLM server must be running
-pkill -INT -f CarlaUE4-Linux-Shipping
+pkill -INT -f "[C]arlaUE4-Linux-Shipping"
 ```
 
 The CARLA Python client is installed by `uv sync`. `carla_server.sh` needs the NVIDIA Vulkan driver

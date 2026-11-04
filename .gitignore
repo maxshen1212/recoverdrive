@@ -23,8 +23,9 @@ __pycache__/
 build/
 dist/
 
-# Rerun recordings
+# Rerun recordings and server logs
 *.rrd
+*.log
 
 # Local tool state
 .claude/settings.local.json
