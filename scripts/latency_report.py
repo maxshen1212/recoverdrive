@@ -35,7 +35,7 @@ def main():
     args = p.parse_args()
     ours = records(args.ours)
     comp = {c: [] for c in COMPONENTS}
-    total_full, total_detect, total_gated, flagged = [], [], [], []
+    total_full, total_detect, total_gated, flagged, method_t = [], [], [], [], []
     for r in ours:
         lat, out = r["latency_s"], r["methods"]["ours_full"]
         t = out["extra"]["timing"]
@@ -49,6 +49,7 @@ def main():
         total_detect.append(pre + vals["vlm_first"])
         is_flagged = bool(out["extra"]["flagged"])
         flagged.append(is_flagged)
+        method_t.append(lat["method:ours_full"])
         total_gated.append(pre + (lat["method:ours_full"] if is_flagged else 0.0))
     mean_total = float(np.mean(total_full))
     rows = [{"component": c, **stats(v), "share": float(np.mean(v)) / mean_total} for c, v in comp.items()]
@@ -80,9 +81,14 @@ def main():
     out = Path("outputs/e4")
     out.mkdir(parents=True, exist_ok=True)
     (out / "latency.md").write_text(text + "\n")
+    fl, mt = np.array(flagged), np.array(method_t)
+    pre_mean = float(np.mean(total_full) - np.mean(mt))
     (out / "latency.json").write_text(json.dumps({"components": rows, "methods": method_rows,
-                                                  "flagged_share": float(np.mean(flagged)),
-                                                  "caption_mean": float(np.mean(caption))}))
+                                                  "flagged_share": float(fl.mean()),
+                                                  "caption_mean": float(np.mean(caption)),
+                                                  "pre_vlm_mean": pre_mean,
+                                                  "method_flagged_mean": float(mt[fl].mean()),
+                                                  "method_unflagged_mean": float(mt[~fl].mean())}))
     print(text)
 
 
