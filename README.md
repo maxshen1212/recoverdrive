@@ -11,10 +11,20 @@ its text-chain reasoning is re-implemented here as baselines B1–B3.
 CARLA, same route and seed. While a pedestrian crosses, the front camera shows the rear view (fault C1); the inset
 shows what the car sees. Playback at 2× speed.
 
-| No monitor (B0) | RecoverDrive (Ours-full) |
-|---|---|
-| ![No monitor: the car hits the pedestrian](docs/media/demo_b0.gif) | ![RecoverDrive: the car slows down and passes safely](docs/media/demo_ours_full.gif) |
-| The car does not see the pedestrian and hits them. | On the first faulty frame the monitor flags the front camera, isolates it and slows to about 8 km/h; the pedestrian has crossed before the car arrives. |
+<table>
+  <tr>
+    <th width="50%">No monitor (B0)</th>
+    <th width="50%">RecoverDrive (Ours-full)</th>
+  </tr>
+  <tr>
+    <td><img src="docs/media/demo_b0.gif" width="100%" alt="No monitor: the car hits the pedestrian"></td>
+    <td><img src="docs/media/demo_ours_full.gif" width="100%" alt="RecoverDrive: the car slows down and passes safely"></td>
+  </tr>
+  <tr>
+    <td>The car does not see the pedestrian and hits them.</td>
+    <td>On the first faulty frame the monitor flags the front camera, isolates it and slows to about 8 km/h; the pedestrian has crossed before the car arrives.</td>
+  </tr>
+</table>
 
 These are example runs. Around 20 s the monitor briefly restores the camera, because nothing is in view to cross-check,
 and then isolates it again. Over all 72 closed-loop runs, the car collided in 7 of 12 runs with this fault without the
