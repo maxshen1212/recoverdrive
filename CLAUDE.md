@@ -18,9 +18,8 @@ Phases 0–5 are done: the full detect → diagnose → recover → verify → f
 | `REPORT.md`, `report_figures/` | Local only (not tracked). Experiment report for Phases 1–5 and its figures/tables (built by `scripts/make_figures.py`). |
 | `project_proposal.tex` / `.pdf` | Local only (not tracked). Course proposal. The `.tex` is a fragment with no `\documentclass` or preamble, so it does not compile on its own. |
 | `2505.02123v1.pdf` | Local only (not tracked). The DriveAgent paper this project starts from: https://arxiv.org/abs/2505.02123 |
-| `DriveAgent/` | Local only (not tracked). Clone of the upstream DriveAgent code (`origin` = github.com/Paparare/DriveAgent). It is its own git repo. |
 
-The repo (github.com/maxshen1212/recoverdrive, private) tracks code, configs, `docs/` (design spec, plans, run logs). `outputs/`, `REPORT.md`, `report_figures/`, `data/`, the PDFs/`.tex`, and `DriveAgent/` are gitignored and exist only on this server.
+The repo (github.com/maxshen1212/recoverdrive, private) tracks code, configs, `docs/` (design spec, plans, run logs). `outputs/`, `REPORT.md`, `report_figures/`, `data/`, and the PDFs/`.tex` are gitignored and exist only on this server.
 
 ## Commands
 
@@ -67,9 +66,9 @@ Unattended runs (`/goal`) follow the project skill `.claude/skills/autonomous-ru
 - `pipeline.py` and `build.py` serve the E0 scripts only.
 - Scripts: `run_eval.py` (E1/E2 and the online ablations), `calibrate.py`, `run_e3.py` + `carla_server.sh` (CARLA), `latency_report.py` (E4), `replay_ablation.py` (offline E5 ablations), `make_figures.py` (report figures/tables).
 
-## DriveAgent/ (upstream reference)
+## DriveAgent (upstream reference)
 
-Upstream: https://github.com/Paparare/DriveAgent (the file names below refer to that repo; the local clone is not tracked). Treat it as read-only reference. The spec does not try to reproduce the paper's numbers: the code does not run, and part of the data (R2/R3) was never released. Released data: Hugging Face dataset `Parechan/driveagent`.
+Upstream: https://github.com/Paparare/DriveAgent. It is not kept in this repo or on the server; clone it if you need to look. The B1–B3 prompts are already copied into `src/recoverdrive/vlm.py`. The file names below refer to that repo. The spec does not try to reproduce the paper's numbers: the code does not run, and part of the data (R2/R3) was never released. Released data: Hugging Face dataset `Parechan/driveagent`.
 
 How it works:
 - Two scripts, each an LLM text chain over "bags": folders named `hou-*` under `--data-root`, each with `bag_information/object_descriptions.csv` and images in `img/`.
