@@ -45,14 +45,16 @@ def row(table, method, fault="all"):
     return next(r for r in table if r["method"] == method and r["fault"] == fault)
 
 
-def label_bars(ax, bars, values, fmt="{:.2f}", horizontal=False):
-    for b, v in zip(bars, values):
+def label_bars(ax, bars, values, fmt="{:.2f}", horizontal=False, errs=None):
+    errs = errs or [0.0] * len(values)
+    for b, v, e in zip(bars, values, errs):
         if horizontal:
             ax.text(b.get_width() + 0.01 * ax.get_xlim()[1], b.get_y() + b.get_height() / 2, fmt.format(v),
                     va="center", ha="left", fontsize=9, color=INK)
         else:
-            ax.text(b.get_x() + b.get_width() / 2, b.get_height(), fmt.format(v), ha="center", va="bottom",
-                    fontsize=8.5, color=INK)
+            pad = 0.012 * ax.get_ylim()[1]
+            ax.text(b.get_x() + b.get_width() / 2, b.get_height() + e + pad, fmt.format(v), ha="center",
+                    va="bottom", fontsize=8.5, color=INK)
 
 
 def fig_e1(e1):
@@ -87,7 +89,8 @@ def fig_e2(e2):
         errs = [row(e2, m).get(f"{col}_std") or 0 for m in methods]
         bars = ax.bar(x + (k - 0.5) * w, vals, w, color=SLOTS[k], label=lab, edgecolor=SURFACE, linewidth=1.5,
                       yerr=errs, error_kw={"ecolor": INK2, "elinewidth": 1, "capsize": 2})
-        label_bars(ax, bars, vals)
+        ax.set_ylim(0, 0.75)
+        label_bars(ax, bars, vals, errs=errs)
     ax.set_xticks(x, [NAMES[m] for m in methods])
     ax.set_ylabel("share of frames")
     ax.yaxis.grid(True, color=GRID, linewidth=0.8)
@@ -122,11 +125,11 @@ def fig_e3(rows):
     fig, axes = plt.subplots(1, 2, figsize=(8.5, 3.0))
     for ax, col, title in ((axes[0], "collision_rate", "collision rate (C1 runs)"),
                            (axes[1], "route_completion", "route completion (C1 runs)")):
-        vals = [r[col] for r in c1]
+        vals, errs = [r[col] for r in c1], [r[f"{col}_std"] for r in c1]
         bars = ax.bar([r["method"] for r in c1], vals, 0.55, color=SLOTS[0], edgecolor=SURFACE, linewidth=1.5,
-                      yerr=[r[f"{col}_std"] for r in c1], error_kw={"ecolor": INK2, "elinewidth": 1, "capsize": 2})
-        label_bars(ax, bars, vals)
+                      yerr=errs, error_kw={"ecolor": INK2, "elinewidth": 1, "capsize": 2})
         ax.set_ylim(0, 1.15)
+        label_bars(ax, bars, vals, errs=errs)
         ax.yaxis.grid(True, color=GRID, linewidth=0.8)
         ax.set_axisbelow(True)
         ax.set_title(title, loc="left", fontsize=10.5)
