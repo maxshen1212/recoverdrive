@@ -124,3 +124,24 @@ def test_chat_json_spreads_requests_over_servers():
     for px in range(20):
         client.chat_json(_messages(seed_px=px), schema)
     assert len(a.calls) + len(b.calls) == 20 and a.calls and b.calls
+
+
+def test_grounding_parse_and_rescale():
+    from recoverdrive.detectors.qwen_grounding import grounding_schema, parse_grounding
+
+    raw = json.dumps({"objects": [{"label": "car", "bbox_2d": [100, 200, 300, 400]},
+                                  {"label": "tree", "bbox_2d": [0, 0, 10, 10]},
+                                  {"label": "bus", "bbox_2d": [500, 500, 400, 600]}]})
+    dets = parse_grounding(raw, 1600, 900, ["car", "bus"])
+    assert len(dets) == 1 and dets[0].label == "car"
+    np.testing.assert_allclose(dets[0].box, [160, 180, 480, 360])
+    assert parse_grounding("nope", 1600, 900, ["car"]) is None
+    assert grounding_schema(["car"])["properties"]["objects"]["items"]["properties"]["label"]["enum"] == ["car"]
+
+
+def test_no_checks_messages_have_no_report():
+    img = image_part(np.zeros((4, 4, 3), np.uint8))
+    text = " ".join(p["text"] for p in ours_messages(None, img, None, img)[1]["content"] if p.get("type") == "text")
+    assert "Consistency report" not in text and "no consistency report" in text
+    with_report = " ".join(p["text"] for p in ours_messages("S", img, None, img)[1]["content"] if p.get("type") == "text")
+    assert "Consistency report:\nS" in with_report

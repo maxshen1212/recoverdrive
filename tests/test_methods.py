@@ -96,3 +96,13 @@ def test_no_sampling_uses_first_answer():
     full = ours.step(make_ctx(flags=["lidar:low_points"]))["ours_full"]
     assert full.n_calls == 1 and "resample" not in full.recovery.steps_taken
     assert full.recovery.isolated_sensors == ["lidar"]
+
+
+def test_no_checks_ablation_ignores_flags():
+    ok = {"verdict": "ok", "fault_type": "none", "confidence": 0.9, "evidence": "e"}
+    fake = FakeOpenAI(ok)
+    ours = Ours(VLMClient("http://x", "m", client=fake), {"recovery": {}, "ablation": "no_checks"})
+    full = ours.step(make_ctx(flags=["lidar:low_points"]))["ours_full"]
+    assert full.recovery.final_state == "healthy" and full.n_calls == 1  # the flag neither triggers sampling nor recovery
+    sent = " ".join(p.get("text", "") for p in fake.calls[0]["messages"][1]["content"])
+    assert "Consistency report" not in sent

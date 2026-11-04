@@ -116,16 +116,17 @@ class Ours:
         self.names = names
         self.rcfg = RecoveryConfig(**cfg.get("recovery", {}))
         self.controller = RecoveryController(self.rcfg)
+        self.no_checks = cfg.get("ablation") == "no_checks"  # E5: the VLM and recovery get no check results
 
     def diagnose(self, ctx: FrameContext, temperature: float = 0.0, seed: int | None = None,
                  attempt_idx: int | None = None) -> Attempt:
-        msgs = ours_messages(ctx.summary, ctx.mosaic, ctx.prev_mosaic, ctx.bev)
+        msgs = ours_messages(None if self.no_checks else ctx.summary, ctx.mosaic, ctx.prev_mosaic, ctx.bev)
         return self.caller.call(msgs, ours_schema(ctx.sensors), temperature=temperature, seed=seed, name="diagnosis",
                                 attempt_idx=attempt_idx)
 
     def step(self, ctx: FrameContext) -> dict[str, MethodOutput]:
         self.caller.new_frame(ctx.agent_fault)
-        flagged = flagged_sensors(ctx.check.report.flags) - {"agent"}
+        flagged = set() if self.no_checks else flagged_sensors(ctx.check.report.flags) - {"agent"}
         if self.rcfg.gate == "flags" and not flagged:  # §4.2 latency optimization: no flag, no VLM call
             return self._gated(ctx)
         timing: dict[str, float] = {}

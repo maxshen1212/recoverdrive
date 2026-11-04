@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import yaml
@@ -18,6 +19,7 @@ from tqdm import tqdm
 
 from recoverdrive.adapters.nuscenes import NuScenesAdapter
 from recoverdrive.cache import KVCache
+from recoverdrive.detectors.qwen_grounding import QwenGroundingDetector
 from recoverdrive.detectors.sam3 import CachedDetector
 from recoverdrive.faults import ALL_FAULTS
 from recoverdrive.metrics import aggregate_seeds, e1_recall_by_severity, e1_table, e2_table, markdown_table
@@ -30,15 +32,18 @@ E2_COLS = ["method", "fault", "n", "rec_success", "ep_recovered", "frames_to_rec
            "unnecessary_clean", "missed_fault"]
 
 
-def precompute_detections(env: EvalEnv, scenes: list[str]) -> None:
-    """SAM 3 on every clean image of the split, so parallel runs mostly hit the cache."""
-    for scene in scenes:
-        tokens = env.adapter.scene_sample_tokens(scene)
-        for idx, tok in enumerate(tqdm(tokens, desc=f"sam3 {scene}", leave=False)):
-            frame = env.adapter.load_frame(scene, idx, tok)
-            for cam in env.cameras:
-                env.detector.detect(frame.cameras[cam].image)
-    print(f"SAM 3 cache: {env.detector.hits} hits, {env.detector.misses} new")
+def precompute_detections(env: EvalEnv, scenes: list[str], workers: int = 1) -> None:
+    """Camera detections for every clean image of the split, so parallel runs mostly hit the cache."""
+    def frame_dets(job):
+        scene, idx, tok = job
+        frame = env.adapter.load_frame(scene, idx, tok)
+        for cam in env.cameras:
+            env.detector.detect(frame.cameras[cam].image)
+
+    jobs = [(sc, i, t) for sc in scenes for i, t in enumerate(env.adapter.scene_sample_tokens(sc))]
+    with ThreadPoolExecutor(max(1, workers)) as pool:
+        list(tqdm(pool.map(frame_dets, jobs), total=len(jobs), desc="detections", leave=False))
+    print(f"detector cache: {env.detector.hits} hits, {env.detector.misses} new")
 
 
 def tables(records: list[dict], methods: list[str], faults: list[str], seeds: list[int]) -> str:
@@ -65,6 +70,13 @@ def main():
     p.add_argument("--workers", type=int, default=12)
     p.add_argument("--tag", required=True, help="output folder name under output.root")
     p.add_argument("--no-precompute", action="store_true")
+    # Phase 5 (E4/E5). None of these change the frozen config file; they patch it in memory and are logged in meta.json.
+    p.add_argument("--ablation", choices=["none", "no_checks", "qwen_grounding"], default="none")
+    p.add_argument("--vlm-model", default=None, help="served model name (e.g. qwen3-vl-4b-instruct)")
+    p.add_argument("--vlm-url", nargs="*", default=None)
+    p.add_argument("--vlm-max-tokens", type=int, default=None)
+    p.add_argument("--cache", default=None, help="cache file (a fresh one disables reuse, for latency runs)")
+    p.add_argument("--sequential", action="store_true", help="methods one after another in each frame (E4)")
     args = p.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text())
@@ -75,6 +87,13 @@ def main():
             commit = check_test_allowed(cfg, REPO)
         except RuntimeError as exc:
             sys.exit(str(exc))
+    cfg["ablation"] = args.ablation
+    cfg["sequential_methods"] = args.sequential
+    for key, val in (("model", args.vlm_model), ("base_url", args.vlm_url), ("max_tokens", args.vlm_max_tokens)):
+        if val:
+            cfg["vlm"][key] = val
+    if args.cache:
+        cfg["cache"] = args.cache
     faults = list(ALL_FAULTS) if args.faults == ["all"] else args.faults
     scenes = args.scenes or splits[args.split]
     if not set(scenes) <= set(splits[args.split]):
@@ -95,11 +114,14 @@ def main():
     adapter = NuScenesAdapter(os.environ.get("NUSCENES_ROOT", "data/nuscenes"), cfg["data"]["version"],
                               cfg["data"]["cameras"], cfg["categories"])
     s = cfg["sam3"]
-    detector = CachedDetector(cache, s["prompts"], s["score_threshold"], s["model_id"])
+    if args.ablation == "qwen_grounding":
+        detector = QwenGroundingDetector(client, s["prompts"])
+    else:
+        detector = CachedDetector(cache, s["prompts"], s["score_threshold"], s["model_id"])
     env = EvalEnv(cfg, adapter, detector, client, out, args.methods)
 
     if not args.no_precompute:
-        precompute_detections(env, scenes)
+        precompute_detections(env, scenes, workers=args.workers if args.ablation == "qwen_grounding" else 1)
     specs = [RunSpec(args.split, sc, f, seed) for seed in args.seeds for f in faults for sc in scenes]
     results = run_all(specs, env, workers=args.workers)
     n_err = sum(r["errors"] for r in results)

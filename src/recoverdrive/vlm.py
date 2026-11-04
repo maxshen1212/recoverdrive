@@ -315,15 +315,31 @@ def ours_schema(sensors: list[str]) -> dict:
     return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
 
 
-def ours_messages(summary: str, mosaic: dict, prev_mosaic: dict | None, bev: dict) -> list[dict]:
-    """`mosaic`, `prev_mosaic`, `bev` are image parts from `image_part`."""
+OURS_GUIDE_NO_CHECKS = (
+    "There is no consistency report: decide from the images alone.\n"
+    "1. Cameras: each tile must show a plausible view for its direction (CAM_FRONT: the road ahead; CAM_BACK: the road "
+    "behind; side cameras: the sides). A tile that shows another camera's view or the same picture as another tile is "
+    "a wrong_viewpoint fault; a tile that is all black, washed out, unrecognizable from blur or noise, tilted or shifted "
+    "is a camera fault; a tile identical to the previous frame while the scene moves is frozen_image. Night, rain, "
+    "glare, motion blur and empty roads are normal.\n"
+    "2. LiDAR top view: a dense cloud in all directions is healthy; an empty wedge, a much sparser cloud than usual, a "
+    "shifted cloud or no points is a LiDAR fault.\n"
+    "If nothing is clearly wrong, answer verdict ok with fault_type none. Answer fault:<sensor> only when the images "
+    "point to that sensor; uncertain only when the evidence conflicts.\n\n"
+    "Return JSON with: verdict (ok, uncertain, or fault:<sensor>), fault_type, confidence in your verdict (0 to 1), "
+    "and evidence (one short sentence)."
+)
+
+
+def ours_messages(summary: str | None, mosaic: dict, prev_mosaic: dict | None, bev: dict) -> list[dict]:
+    """`mosaic`, `prev_mosaic`, `bev` are image parts from `image_part`. `summary=None` is the no-checks ablation."""
     content: list[dict] = [{"type": "text", "text": "Image 1: current frame, all cameras."}, mosaic]
     if prev_mosaic is not None:
         content += [{"type": "text", "text": "Image 2: previous frame, same layout."}, prev_mosaic]
     else:
         content += [{"type": "text", "text": "(No previous frame: this is the first frame.)"}]
-    content += [{"type": "text", "text": "Image 3: LiDAR top view."}, bev,
-                {"type": "text", "text": f"Consistency report:\n{summary}\n\n{OURS_GUIDE}"}]
+    tail = OURS_GUIDE_NO_CHECKS if summary is None else f"Consistency report:\n{summary}\n\n{OURS_GUIDE}"
+    content += [{"type": "text", "text": "Image 3: LiDAR top view."}, bev, {"type": "text", "text": tail}]
     return [{"role": "system", "content": OURS_SYSTEM}, {"role": "user", "content": content}]
 
 

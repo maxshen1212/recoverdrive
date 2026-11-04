@@ -126,10 +126,12 @@ def run_one(spec: RunSpec, env: EvalEnv) -> dict:
     for idx, token in enumerate(tokens):
         try:
             lat = {}
+            t0 = time.perf_counter()
             raw = env.adapter.load_frame(spec.scene, idx, token)
             originals[idx] = raw
             originals.pop(idx - 8, None)
             frame, label = injector.apply(raw, originals)
+            lat["load"] = time.perf_counter() - t0
             agent_fault = AgentFaultState.from_event(plan[idx])
             t0 = time.perf_counter()
             dets = {c: env.detector.detect(frame.cameras[c].image) for c in cams}
@@ -139,8 +141,10 @@ def run_one(spec: RunSpec, env: EvalEnv) -> dict:
             summary = summarize_checks(check.report, check_cfg.max_range_m, check_cfg.iou_threshold,
                                        check_cfg.min_points_in_box, cfg["data"].get("nominal_lidar_points"))
             lat["checks"] = time.perf_counter() - t0
+            t0 = time.perf_counter()
             mosaic = image_part(camera_mosaic({c: frame.cameras[c].image for c in cams}))
             bev = image_part(lidar_bev(points_in_ego(frame)))
+            lat["render"] = time.perf_counter() - t0
             ctx = FrameContext(frame, label, check, summary, mosaic, prev_mosaic, bev, sensors_of(cams),
                                frame_seed(spec.seed, spec.scene, idx), agent_fault, dets, prev_frame)
             outputs = {}
@@ -149,7 +153,12 @@ def run_one(spec: RunSpec, env: EvalEnv) -> dict:
                 t0 = time.perf_counter()
                 return m, m.step(ctx), time.perf_counter() - t0
 
-            if methods:  # none = checks-only run (calibration)
+            if methods and cfg.get("sequential_methods"):  # E4: no contention between methods
+                for m in methods:
+                    _, out, dt = timed(m)
+                    outputs.update(out)
+                    lat["method:" + "+".join(m.names)] = dt
+            elif methods:  # none = checks-only run (calibration)
                 with ThreadPoolExecutor(len(methods)) as pool:  # methods are independent within a frame
                     for m, out, dt in pool.map(timed, methods):
                         outputs.update(out)
