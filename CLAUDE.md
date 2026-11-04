@@ -19,7 +19,7 @@ Phases 0–5 are done: the full detect → diagnose → recover → verify → f
 | `project_proposal.tex` / `.pdf` | Local only (not tracked). Course proposal. The `.tex` is a fragment with no `\documentclass` or preamble, so it does not compile on its own. |
 | `2505.02123v1.pdf` | Local only (not tracked). The DriveAgent paper this project starts from: https://arxiv.org/abs/2505.02123 |
 
-The repo (github.com/maxshen1212/VLM-Recover-Drive, private) tracks code, configs, `docs/` (design spec, plans, run logs). `outputs/`, `REPORT.md`, `report_figures/`, `data/`, and the PDFs/`.tex` are gitignored and exist only on this server.
+The repo (github.com/maxshen1212/recoverdrive, private) tracks code, configs, `docs/` (design spec, plans, run logs). `outputs/`, `REPORT.md`, `report_figures/`, `data/`, and the PDFs/`.tex` are gitignored and exist only on this server.
 
 ## Commands
 

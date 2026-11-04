@@ -61,7 +61,7 @@ Run every command from the repository root.
 **1. Clone and set the environment.** `scripts/env.sh` must be sourced in every new shell.
 
 ```bash
-git clone git@github.com:maxshen1212/VLM-Recover-Drive.git && cd VLM-Recover-Drive
+git clone git@github.com:maxshen1212/recoverdrive.git && cd recoverdrive
 export UV_CACHE_DIR=~/.cache/uv     # only if you have no /data disk (env.sh defaults to /data/$USER/.cache/uv)
 export HF_HOME=~/.cache/huggingface # optional: where model weights go (~21 GB)
 source scripts/env.sh
