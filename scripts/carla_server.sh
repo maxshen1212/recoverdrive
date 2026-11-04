@@ -7,6 +7,15 @@
 # Usage: [CARLA_ROOT=...] [CARLA_PORT=2000] [CARLA_ADAPTER=1] ./scripts/carla_server.sh
 set -euo pipefail
 CARLA_ROOT="${CARLA_ROOT:-/data/$USER/carla/CARLA_0.9.16}"
-export VK_ICD_FILENAMES=/etc/vulkan/icd.d/nvidia_icd.json
+if [ -z "${VK_ICD_FILENAMES:-}" ]; then
+  for f in /etc/vulkan/icd.d/nvidia_icd.json /usr/share/vulkan/icd.d/nvidia_icd.json; do
+    [ -f "$f" ] && export VK_ICD_FILENAMES="$f" && break
+  done
+fi
+if [ -z "${VK_ICD_FILENAMES:-}" ]; then
+  echo "No NVIDIA Vulkan driver file (nvidia_icd.json) found; set VK_ICD_FILENAMES to its path." >&2
+  exit 1
+fi
+[ -x "$CARLA_ROOT/CarlaUE4.sh" ] || { echo "CARLA not found at $CARLA_ROOT; set CARLA_ROOT." >&2; exit 1; }
 exec "$CARLA_ROOT/CarlaUE4.sh" -RenderOffScreen -nosound -quality-level=Low \
   -carla-rpc-port="${CARLA_PORT:-2000}" -graphicsadapter="${CARLA_ADAPTER:-1}" "$@"
