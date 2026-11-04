@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 
-from recoverdrive.metrics import aggregate_seeds, e1_table, e2_table
+from recoverdrive.metrics import aggregate_seeds, e1_table, e2_table, fmt, markdown_table
 from recoverdrive.runner import RunSpec, load_records
 
 OUT = Path("report_figures")
@@ -198,6 +198,64 @@ def fig_e5(rows):
     plt.close(fig)
 
 
+E1K = ("F1", "R", "P", "sensor_acc", "false_alarm")
+E2K = ("unnecessary", "missed", "rec_success")
+
+
+def pick(r: dict, keys) -> dict:
+    """Values and their seed std (when present) for the given metric keys."""
+    return {**{k: r[k] for k in keys}, **{f"{k}_std": r.get(f"{k}_std") for k in keys}}
+
+
+def write_tables(summary: dict) -> None:
+    """All report tables as Markdown (report_figures/tables.md)."""
+    e1, e2 = summary["test_main"]["e1"], summary["test_main"]["e2"]
+    methods = list(NAMES)
+
+    def named(rows):
+        return [{**r, "method": NAMES.get(r["method"], r["method"])} for r in rows]
+
+    lines = ["## T1 Test E1, all faults (mean ± std over 3 seeds)", "",
+             markdown_table(named([row(e1, m) for m in methods]), ["method", "P", "R", "F1", "sensor_acc",
+                                                                   "false_alarm"]), ""]
+    pivot = []
+    for m in methods[1:]:
+        pivot.append({"method": NAMES[m], **{f: fmt(row(e1, m, f)["F1"]) for f in FAULTS + ["all"]}})
+    lines += ["## T2 Test E1 F1 by fault (mean over 3 seeds)", "", markdown_table(pivot, ["method", *FAULTS, "all"]),
+              ""]
+    lines += ["## T3 Test E2, all faults (mean ± std over 3 seeds)", "",
+              markdown_table(named([row(e2, m) for m in methods]),
+                             ["method", "unnecessary", "missed", "unnecessary_clean", "missed_fault", "rec_success",
+                              "ep_recovered", "frames_to_recover"]), ""]
+    pivot = [{"method": NAMES[m], **{f: f"{fmt(row(e2, m, f)['unnecessary'])} / {fmt(row(e2, m, f)['missed'])}"
+                                     for f in FAULTS + ["all"]}} for m in methods]
+    lines += ["## T4 Test E2 unnecessary / missed fallback by fault", "",
+              markdown_table(pivot, ["method", *FAULTS, "all"]), ""]
+    rec = [{"fault": f, **{k: row(e2, "ours_full", f)[k] for k in ("rec_success", "ep_recovered",
+                                                                    "frames_to_recover")},
+            **{f"{k}_std": row(e2, "ours_full", f).get(f"{k}_std") for k in ("rec_success", "ep_recovered",
+                                                                               "frames_to_recover")}}
+           for f in FAULTS + ["all"]]
+    lines += ["## T5 Test E2 Ours-full recovery by fault", "",
+              markdown_table(rec, ["fault", "rec_success", "ep_recovered", "frames_to_recover"]), ""]
+    lines += ["## T6 E3 closed loop in CARLA (mean ± std over 3 seeds; 12 runs per row)", "",
+              markdown_table(summary["e3"], ["method", "condition", "runs", "collision_rate", "route_completion",
+                                             "unnecessary_stops"]), ""]
+    e4 = summary["e4"]
+    lines += ["## T7 E4 latency, Ours-full components (s per frame, dev scene-0061)", "",
+              markdown_table(e4["components"], ["component", "mean", "median", "p90", "share"]), "",
+              "## T8 E4 latency by method (s per frame)", "",
+              markdown_table(e4["methods"], ["method", "mean", "median", "p90"]), "",
+              (f"Re-weighted to the test flag rate ({e4['test_flag_share']:.3f}): Ours-full "
+               f"{e4['full_latency_test_estimate']:.2f} s, with VLM gate {e4['gated_latency_test_estimate']:.2f} s."),
+              ""]
+    ref0 = {"variant": "Ours-full, seed 0 only (reference for Thinking)", "seeds": 1, **summary["e5_reference_seed0"]}
+    lines += ["## T9 E5 ablation of Ours-full on the test split, all faults", "",
+              markdown_table(summary["e5"] + [ref0], ["variant", "seeds", "P", "R", "F1", "sensor_acc",
+                                                      "false_alarm", "unnecessary", "missed", "rec_success"]), ""]
+    (OUT / "tables.md").write_text("\n".join(lines) + "\n")
+
+
 def main():
     OUT.mkdir(exist_ok=True)
     summary = {}
@@ -227,9 +285,7 @@ def main():
     for label, key in variants:
         r1 = next(r for r in replay["e1"] if r["method"] == f"ours_full[{key}]" and r["fault"] == "all")
         r2 = next(r for r in replay["e2"] if r["method"] == f"ours_full[{key}]" and r["fault"] == "all")
-        rows5.append({"variant": label, "seeds": 3, **{k: r1[k] for k in ("F1", "R", "P", "sensor_acc",
-                                                                           "false_alarm")},
-                      **{k: r2[k] for k in ("unnecessary", "missed", "rec_success")}})
+        rows5.append({"variant": label, "seeds": 3, **pick(r1, E1K), **pick(r2, E2K)})
     online = [("− consistency checks", "test_abl_no_checks", [0, 1, 2]),
               ("SAM 3 → Qwen grounding", "test_abl_qwen_grounding", [0, 1, 2]),
               ("Qwen3-VL 8B → 4B", "test_abl_4b", [0, 1, 2]),
@@ -238,17 +294,14 @@ def main():
         if not (Path("outputs/eval") / tag / "summary.md").exists():
             continue
         a1, a2, _ = tables(tag, ["ours_full"], seeds)
-        rows5.append({"variant": label, "seeds": len(seeds),
-                      **{k: row(a1, "ours_full")[k] for k in ("F1", "R", "P", "sensor_acc", "false_alarm")},
-                      **{k: row(a2, "ours_full")[k] for k in ("unnecessary", "missed", "rec_success")}})
+        rows5.append({"variant": label, "seeds": len(seeds), **pick(row(a1, "ours_full"), E1K),
+                      **pick(row(a2, "ours_full"), E2K)})
     s0e1, s0e2, _ = tables("test_final", ["ours_full"], [0])  # reference for the seed-0-only Thinking run
     summary["e5"] = rows5
-    summary["e5_reference_seed0"] = {**{k: row(s0e1, "ours_full")[k] for k in ("F1", "R", "P", "sensor_acc",
-                                                                            "false_alarm")},
-                                     **{k: row(s0e2, "ours_full")[k] for k in ("unnecessary", "missed",
-                                                                               "rec_success")}}
+    summary["e5_reference_seed0"] = {**pick(row(s0e1, "ours_full"), E1K), **pick(row(s0e2, "ours_full"), E2K)}
     fig_e5(rows5)
     (OUT / "summary.json").write_text(json.dumps(summary, indent=1))
+    write_tables(summary)
     print(json.dumps({"e5": rows5, "e5_reference_seed0": summary["e5_reference_seed0"],
                       "full_latency_test_estimate": full_test, "gated_latency_test_estimate": gated_test,
                       "test_flag_share": flag_share}, indent=1))
