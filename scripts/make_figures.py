@@ -16,7 +16,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 
-from recoverdrive.metrics import aggregate_seeds, e1_table, e2_table, fmt, latency_estimates, markdown_table
+from recoverdrive.bootstrap import merge_runs
+from recoverdrive.metrics import (
+    aggregate_seeds,
+    difficulty_table,
+    e1_table,
+    e2_table,
+    fmt,
+    latency_estimates,
+    markdown_table,
+)
 from recoverdrive.runner import RunSpec, load_records
 
 OUT = Path("report_figures")
@@ -259,6 +268,69 @@ def write_tables(summary: dict) -> None:
     (OUT / "tables.md").write_text("\n".join(lines) + "\n")
 
 
+def step1_tables(summary: dict) -> tuple[dict, list[str]]:
+    """FutureWork Step 1 sections: checks-only baseline, easy vs hard faults, bootstrap intervals, model size and
+    the VLM gate. A section is skipped when its inputs do not exist yet."""
+    out, lines = {}, []
+    names = {**NAMES, "checks_only": "Checks-only (no VLM)"}
+    main1, main2 = summary["test_main"]["e1"], summary["test_main"]["e2"]
+    base = [{"method": names[m], **pick(row(main1, m), E1K), **pick(row(main2, m), E2K)} for m in NAMES]
+    have_checks = (Path("outputs/eval/test_checks_only") / "summary.md").exists()
+    if have_checks:
+        c1, c2, _ = tables("test_checks_only", ["checks_only"], [0, 1, 2], recovery=("checks_only",))
+        base.append({"method": names["checks_only"], **pick(row(c1, "checks_only"), E1K),
+                     **pick(row(c2, "checks_only"), E2K)})
+        out["main_with_checks_only"] = base
+        lines += ["## S1 Test E1/E2 with the checks-only baseline (mean ± std over 3 seeds)", "",
+                  markdown_table(base, ["method", *E1K, *E2K]), ""]
+
+    specs = [RunSpec("test", sc, f, s) for s in (0, 1, 2) for f in FAULTS for sc in TEST_SCENES]
+    runs = [(load_records(Path("outputs/eval/test_final"), specs), None)]
+    methods = ["B1", "B2", "B3", "ours_detect", "ours_full"]
+    if have_checks:
+        runs.append((load_records(Path("outputs/eval/test_checks_only"), specs), None))
+        methods.append("checks_only")
+    recs = [r for r in merge_runs([([r for r in rs if "error" not in r], p) for rs, p in runs])]
+    diff = [{**r, "method": names[r["method"]]} for r in difficulty_table(recs, methods)]
+    out["difficulty"] = diff
+    lines += ["## S2 Easy vs. hard faults (fault frames only, 3 seeds pooled)", "",
+              "Easy: L4, high-severity L1, A1, A3 (a point count or JSON validation catches them). Hard: all others.",
+              "", markdown_table(diff, ["method", "difficulty", "n_fault", "R", "sensor_acc", "missed_fault",
+                                        "rec_success"]), ""]
+
+    boot = Path("report_figures/bootstrap.json")
+    if boot.exists():
+        rows = [r for r in json.loads(boot.read_text())["rows"] if r["metric"] in ("F1", "false_alarm", "unnecessary")]
+        out["bootstrap"] = rows
+        lines += ["## S3 Bootstrap 95 % intervals (blocks = fault episodes and clean gaps; seeds pooled)", "",
+                  markdown_table(rows, ["method", "metric", "point", "lo", "hi"]), ""]
+
+    gate_rows = []
+    for label, tag, e4 in (("8B", "test_final", "outputs/e4_8b_v2"), ("4B", "test_abl_4b", "outputs/e4_4b")):
+        rp, lat_path = Path("outputs/eval") / tag / "ablation_replay.json", Path(e4) / "latency.json"
+        if not rp.exists():
+            continue
+        rep_json = json.loads(rp.read_text())
+        calls = {c["method"]: c for c in rep_json["calls"]}
+        share = 1 - calls["ours_full[gate_flags]"]["frames_without_vlm"]
+        lat = json.loads(lat_path.read_text()) if lat_path.exists() else None
+        est = (latency_estimates(lat["pre_vlm_mean"], lat["method_flagged_mean"], lat["method_unflagged_mean"], share)
+               if lat else {"full": None, "gated": None})
+        for var, suffix, key in (("full", "", "full"), ("gate_flags", " + VLM gate", "gated")):
+            name = f"ours_full[{var}]"
+            r1 = next(r for r in rep_json["e1"] if r["method"] == name and r["fault"] == "all")
+            r2 = next(r for r in rep_json["e2"] if r["method"] == name and r["fault"] == "all")
+            gate_rows.append({"variant": f"Qwen3-VL-{label}{suffix}", **pick(r1, ("F1", "sensor_acc", "false_alarm")),
+                              **pick(r2, ("unnecessary", "missed")),
+                              "vlm_calls_per_frame": calls[name]["vlm_calls_per_frame"], "s_per_frame": est[key]})
+    if gate_rows:
+        out["model_and_gate"] = gate_rows
+        lines += ["## S4 Model size and the VLM gate (test split, 3 seeds; latency re-timed on dev scene-0061)", "",
+                  markdown_table(gate_rows, ["variant", "F1", "sensor_acc", "false_alarm", "unnecessary", "missed",
+                                             "vlm_calls_per_frame", "s_per_frame"]), ""]
+    return out, lines
+
+
 def main():
     OUT.mkdir(exist_ok=True)
     summary = {}
@@ -302,8 +374,12 @@ def main():
     summary["e5"] = rows5
     summary["e5_reference_seed0"] = {**pick(row(s0e1, "ours_full"), E1K), **pick(row(s0e2, "ours_full"), E2K)}
     fig_e5(rows5)
+    step1, step1_lines = step1_tables(summary)
+    summary["step1"] = step1
     (OUT / "summary.json").write_text(json.dumps(summary, indent=1))
     write_tables(summary)
+    with (OUT / "tables.md").open("a") as f:
+        f.write("\n".join(step1_lines) + "\n")
     print(json.dumps({"e5": rows5, "e5_reference_seed0": summary["e5_reference_seed0"],
                       "full_latency_test_estimate": full_test, "gated_latency_test_estimate": gated_test,
                       "test_flag_share": flag_share}, indent=1))
