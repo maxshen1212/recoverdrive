@@ -16,15 +16,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 
-from recoverdrive.bootstrap import merge_runs
+from recoverdrive.bootstrap import bootstrap_metrics, merge_runs
 from recoverdrive.metrics import (
     aggregate_seeds,
     difficulty_table,
+    e1_counts,
     e1_table,
     e2_table,
     fmt,
     latency_estimates,
     markdown_table,
+    method_frames,
+    sensor_fault_view,
 )
 from recoverdrive.runner import RunSpec, load_records
 
@@ -297,6 +300,18 @@ def step1_tables(summary: dict) -> tuple[dict, list[str]]:
               "Easy: L4, high-severity L1, A1, A3 (a point count or JSON validation catches them). Hard: all others.",
               "", markdown_table(diff, ["method", "difficulty", "n_fault", "R", "sensor_acc", "missed_fault",
                                         "rec_success"]), ""]
+
+    if have_checks:
+        view = sensor_fault_view(recs)
+        sf = [{"method": names[m], **e1_counts(method_frames(view, m))} for m in methods]
+        diff_rows = [r for r in bootstrap_metrics(view, ["ours_full", "checks_only"], "ours_full")
+                     if r["method"] == "ours_full - checks_only" and r["metric"] in ("F1", "sensor_acc", "false_alarm")]
+        out["sensor_faults_only"] = {"e1": sf, "ours_full_minus_checks_only": diff_rows}
+        lines += ["## S5 Sensor faults only (agent-fault frames removed; clean frames kept; seeds pooled)", "",
+                  ("Agent faults are failures of the VLM itself; a monitor without a VLM cannot have them, so they are "
+                   "left out when Ours is compared with the rules alone."), "",
+                  markdown_table(sf, ["method", "n", "n_fault", "P", "R", "F1", "sensor_acc", "false_alarm"]), "",
+                  markdown_table(diff_rows, ["method", "metric", "point", "lo", "hi"]), ""]
 
     boot = Path("report_figures/bootstrap.json")
     if boot.exists():

@@ -30,6 +30,19 @@ and the git log, and the note says how sure that is.
 | `REPORT.md` | (repo root, not tracked) | text written at the P5-T6 checkpoint `528b367afbcf6133ad69e912e6cc2ea2cb59468a` | Last edited 23:57 on HEAD `14d3024`. | - |
 | CARLA demo GIFs | `e3/demo/` (copies tracked in `docs/media/`) | `529fcf6` | From the git log. | - |
 
+### Step 1 results (2026-11-15, branch `step1-report-completeness`)
+
+Every run below records its commit and `dirty: false` in its own `meta.json` / output JSON (`git_state`).
+
+| Result | Path (under `outputs/` unless noted) | Commit | Source |
+|---|---|---|---|
+| Checks-only on dev (seeds 0–2, all faults; Step 2 classifier training data) | `eval/dev_checks_only/` | `8f49275` | Recorded. Flags identical to `p3_dev` on 2430/2430 frames. |
+| **Checks-only on the test split** (3 seeds, all faults) | `eval/test_checks_only/` | `3483460` | Recorded. Flags identical to `test_final` on 4830/4830 frames. |
+| 4B + VLM gate (offline replay of the 4B test run) | `eval/test_abl_4b/ablation_replay.{md,json}` | `ca7a200` | Recorded (replay reproduces 4830/4830). |
+| E4 re-timed, 8B and 4B (dev scene-0061) | `eval/e4_ours_8b_v2/`, `eval/e4_ours_4b/`; `e4_8b_v2/`, `e4_4b/` | `3483460` | Recorded. |
+| Bootstrap intervals | `report_figures/bootstrap.{md,json}` (repo root, not tracked) | `3483460` | Recorded in the JSON. |
+| Step 1 tables S1–S5 | `report_figures/tables.md`, key `step1` of `summary.json` | branch head | `scripts/make_figures.py`; old keys unchanged. |
+
 Later commits (`528b367..14d3024`) changed only documentation, comments, the model download script, the CARLA
 launcher, and demo recording in `run_e3.py`. No change affects any number above.
 

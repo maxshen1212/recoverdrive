@@ -24,6 +24,23 @@ Codes such as E1 or C1 are explained in the glossary at the end.
 
 ## Step 1: make the report complete
 
+**Done (2026-11-15).** Results in `report_figures/tables.md` (S1–S5), `REPORT.md` §4.1, and the provenance file.
+- Checks-only baseline: on sensor faults it matches Ours-full (F1 0.714 for both, difference 0.000 [−0.001, 0.002];
+  same false alarms; sensor accuracy 0.933 vs 0.918). Ours-full's higher pooled F1 (0.77 vs 0.60) is the agent faults,
+  which a monitor without a VLM cannot have. **On this benchmark the VLM confirms the flags and adds no detection or
+  fallback quality of its own.**
+- Bootstrap: every Ours-full − B1/B2/B3 interval excludes 0 (F1 +0.15 to +0.18; false alarm −0.23 to −0.73).
+- Easy vs. hard: on hard faults B3 names the right sensor 23 % of the time, Ours-full 79 %, checks-only 88 %.
+- 4B + VLM gate: the same fallback quality as 8B (F1 0.601, unnecessary 0.065, missed 0.053) at 1.9 s per frame
+  (8B 3.6 s, 8B + gate 2.4 s, test-weighted).
+
+**What this changes for the paper.** The finding "evidence matters more than model size" now reads "the
+deterministic evidence does the detection; the VLM defers to it". Before investing in Step 2 and Step 3, decide the
+claim: either present the monitor (checks + recovery + shield) as the contribution with the VLM as an optional
+explainer, or find faults the checks cannot see where the VLM helps (subtle image faults, ghost objects (L3), real
+adverse weather), which Step 3's new data would have to show. Step 2's text-chain baselines with the check numbers
+will likely land near checks-only for the same reason.
+
 Cheap and mostly offline: these reuse the logs of the existing runs.
 
 | Item | What to do | Question it answers |

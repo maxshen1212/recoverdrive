@@ -11,6 +11,7 @@ from recoverdrive.metrics import (
     e1_table,
     latency_estimates,
     markdown_table,
+    sensor_fault_view,
 )
 from recoverdrive.runner import RunSpec, check_test_allowed, git_state, run_all, run_paths, run_status
 
@@ -120,3 +121,11 @@ def test_difficulty_table_uses_fault_frames_only():
 def test_latency_estimates():
     est = latency_estimates(pre_vlm_mean=1.0, flagged_mean=4.0, unflagged_mean=3.0, flag_share=0.25)
     assert est == {"full": pytest.approx(4.25), "gated": pytest.approx(2.0)}
+
+
+def test_sensor_fault_view_drops_agent_fault_frames_only():
+    def r(fault, sensor):
+        return {"label": {"fault_id": fault, "sensor": sensor, "severity": None, "episode_id": None}}
+
+    recs = [r("none", "none"), r("A2", "agent"), r("L1", "lidar"), r("A1", "agent")]
+    assert [x["label"]["fault_id"] for x in sensor_fault_view(recs)] == ["none", "L1"]

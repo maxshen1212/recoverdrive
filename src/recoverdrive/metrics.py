@@ -225,3 +225,9 @@ def latency_estimates(pre_vlm_mean: float, flagged_mean: float, unflagged_mean: 
     return {"full": pre_vlm_mean + flag_share * flagged_mean + (1 - flag_share) * unflagged_mean,
             "gated": pre_vlm_mean + flag_share * flagged_mean}
 
+
+def sensor_fault_view(records: list[dict]) -> list[dict]:
+    """Records without agent-fault frames (clean frames and sensor-fault frames stay). Agent faults are failures of the
+    VLM itself, which a monitor without a VLM cannot have, so they must be left out when the two are compared."""
+    return [r for r in records if r["label"]["sensor"] != "agent"]
+

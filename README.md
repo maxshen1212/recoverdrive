@@ -14,7 +14,10 @@ On the nuScenes-mini test split (10 injected fault types, 3 seeds), RecoverDrive
 false-alarm rate; the DriveAgent-style baselines on the same model reach 0.58–0.61 with 35–85 % false alarms. In
 CARLA, a faulty front camera caused a collision in 7 of 12 runs without the monitor and in 0 of 12 with it.
 
-These are course-project results with known limits, such as an oracle LiDAR detector and only 4 test scenes.
+A rules-only baseline with the same checks, recovery and shield but no VLM matches it on sensor faults (F1 0.714 for
+both); the higher pooled F1 comes from faults of the VLM itself. On this benchmark the deterministic checks do the
+detection and the VLM confirms them. These are course-project results with known limits, such as an oracle LiDAR
+detector and only 4 test scenes.
 **The plan to address them and turn this into a paper is in [FutureWork.md](FutureWork.md).** Related work is
 surveyed in [docs/related-work.md](docs/related-work.md).
 
