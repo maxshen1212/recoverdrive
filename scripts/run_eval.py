@@ -22,6 +22,7 @@ from recoverdrive.cache import KVCache
 from recoverdrive.detectors.qwen_grounding import QwenGroundingDetector
 from recoverdrive.detectors.sam3 import CachedDetector
 from recoverdrive.faults import ALL_FAULTS
+from recoverdrive.methods import needs_vlm
 from recoverdrive.metrics import aggregate_seeds, e1_recall_by_severity, e1_table, e2_table, markdown_table
 from recoverdrive.runner import EvalEnv, RunSpec, check_test_allowed, git_state, load_records, run_all
 from recoverdrive.vlm import VLMClient, healthy_servers
@@ -106,11 +107,15 @@ def main():
 
     cache = KVCache(cfg["cache"])
     v = cfg["vlm"]
-    servers = healthy_servers(v["base_url"])
-    if not servers:
-        sys.exit(f"no healthy VLM server among {v['base_url']}")
-    print(f"VLM servers: {servers}")
-    client = VLMClient(servers, v["model"], max_tokens=v["max_tokens"], timeout_s=v["timeout_s"], cache=cache)
+    client = None
+    if needs_vlm(args.methods, args.ablation):
+        servers = healthy_servers(v["base_url"])
+        if not servers:
+            sys.exit(f"no healthy VLM server among {v['base_url']}")
+        print(f"VLM servers: {servers}")
+        client = VLMClient(servers, v["model"], max_tokens=v["max_tokens"], timeout_s=v["timeout_s"], cache=cache)
+    else:
+        print("no VLM needed for these methods")
     adapter = NuScenesAdapter(os.environ.get("NUSCENES_ROOT", "data/nuscenes"), cfg["data"]["version"],
                               cfg["data"]["cameras"], cfg["categories"])
     s = cfg["sam3"]

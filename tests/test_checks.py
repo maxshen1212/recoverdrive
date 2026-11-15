@@ -1,6 +1,13 @@
 import numpy as np
 
-from recoverdrive.checks import CameraConsistency, build_report, iou_matrix, match_boxes, match_rate
+from recoverdrive.checks import (
+    CameraConsistency,
+    build_report,
+    iou_matrix,
+    match_boxes,
+    match_rate,
+    rank_sensors,
+)
 from recoverdrive.types import CameraCheck
 
 
@@ -111,3 +118,8 @@ def test_flagged_sensors_maps_flags():
              "camera:CAM_FRONT:frozen"]
     assert flagged_sensors(flags) == {"camera:CAM_FRONT", "lidar", "agent"}
     assert flags_by_sensor(flags)["camera:CAM_FRONT"] == ["low_match", "frozen"]
+
+
+def test_rank_sensors_most_flags_first():
+    flags = ["camera:CAM_BACK:low_match", "lidar:low_points", "lidar:point_drop", "camera:CAM_FRONT:no_reference"]
+    assert rank_sensors(flags) == ["lidar", "camera:CAM_BACK"]

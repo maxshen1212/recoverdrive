@@ -116,7 +116,7 @@ def markdown_table(rows: list[dict], cols: list[str], pct: tuple[str, ...] = ())
 
 # --- E2: recovery and fallback ----------------------------------------------------------------------------
 
-RECOVERY_METHODS = ("ours_full",)
+RECOVERY_METHODS = ("ours_full", "checks_only")
 
 
 def _label(r: dict):

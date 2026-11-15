@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image
 
 from recoverdrive.agent import AgentCaller, Attempt
-from recoverdrive.checks import CheckOutput, flagged_sensors
+from recoverdrive.checks import CheckOutput, flagged_sensors, rank_sensors
 from recoverdrive.faults import AGENT_FAULTS, AgentFaultState
 from recoverdrive.geometry import to_sensor_frame
 from recoverdrive.recovery import RecoveryConfig, RecoveryController, no_recovery, vote
@@ -193,6 +193,37 @@ class Ours:
         return outputs
 
 
+def rules_outcome(result: RecoveryResult, ranked: list[str]) -> tuple[bool, str]:
+    """E1 alarm and blamed sensor of a monitor without a VLM: the first ranked sensor that is isolated, else the
+    first ranked sensor."""
+    alarm = result.final_state != "healthy"
+    if not alarm:
+        return False, "none"
+    isolated = set(result.isolated_sensors)
+    pred = next((s for s in ranked if s in isolated), ranked[0] if ranked else "none")
+    return True, pred
+
+
+class ChecksOnly:
+    """Rules only, no VLM: every sensor with a deterministic fault flag is suspected with confidence 1.0, then the same
+    re-observe / isolate / verify and shield as Ours-full (FutureWork Step 1)."""
+
+    names = ("checks_only",)
+
+    def __init__(self, cfg: dict):
+        self.controller = RecoveryController(RecoveryConfig(**cfg.get("recovery", {})))
+
+    def step(self, ctx: FrameContext) -> dict[str, MethodOutput]:
+        ranked = rank_sensors(ctx.check.report.flags)
+        result = self.controller.step_suspects(set(ranked), 1.0, set(ranked), ["rules"])
+        alarm, pred = rules_outcome(result, ranked)
+        extra: dict = {"flagged": ranked}
+        if ctx.agent_fault is not None:
+            extra["agent_recovered"] = True  # no VLM call, so the agent fault has no effect (as with the VLM gate)
+        return {"checks_only": MethodOutput(None, True, alarm, pred, recovery=result, action=shield(result),
+                                            n_calls=0, extra=extra)}
+
+
 class B0:
     """No monitor: always continue."""
 
@@ -254,15 +285,25 @@ class TextChain:
         return {self.names[0]: out}
 
 
+VLM_FREE_METHODS = ("B0", "checks_only")
+
+
+def needs_vlm(methods: list[str], ablation: str) -> bool:
+    """True if a VLM server is needed: a method outside VLM_FREE_METHODS, or Qwen grounding as the camera detector."""
+    return any(m not in VLM_FREE_METHODS for m in methods) or ablation == "qwen_grounding"
+
+
 def build_methods(names: list[str], client: VLMClient | None, cfg: dict) -> list:
     """One object per method family; each keeps its own per-run state."""
     methods: list = []
-    known = ("B0", "B1", "B2", "B3", "ours_detect", "ours_full")
+    known = ("B0", "B1", "B2", "B3", "ours_detect", "ours_full", "checks_only")
     unknown = [n for n in names if n not in known]
     if unknown:
         raise ValueError(f"unknown methods: {unknown}")
     if "B0" in names:
         methods.append(B0())
+    if "checks_only" in names:
+        methods.append(ChecksOnly(cfg))
     methods += [TextChain(n, client) for n in ("B1", "B2", "B3") if n in names]
     ours = tuple(n for n in ("ours_detect", "ours_full") if n in names)
     if ours:

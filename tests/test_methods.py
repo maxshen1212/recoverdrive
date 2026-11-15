@@ -3,7 +3,7 @@ import json
 from fakes import GOOD, FakeOpenAI, lidar_object, make_ctx
 
 from recoverdrive.faults import AgentFaultState
-from recoverdrive.methods import B0, Ours, TextChain, build_methods, lidar_text
+from recoverdrive.methods import B0, ChecksOnly, Ours, TextChain, build_methods, lidar_text, needs_vlm
 from recoverdrive.vlm import VLMClient, textchain_schema
 
 SENSORS = ["camera:CAM_FRONT", "lidar"]
@@ -106,3 +106,32 @@ def test_no_checks_ablation_ignores_flags():
     assert full.recovery.final_state == "healthy" and full.n_calls == 1  # the flag neither triggers sampling nor recovery
     sent = " ".join(p.get("text", "") for p in fake.calls[0]["messages"][1]["content"])
     assert "Consistency report" not in sent
+
+
+def test_checks_only_healthy_without_flags():
+    out = ChecksOnly({"recovery": {}}).step(make_ctx())["checks_only"]
+    assert not out.alarm and out.pred_sensor == "none" and out.action.action == "continue" and out.n_calls == 0
+
+
+def test_checks_only_isolates_flagged_camera():
+    out = ChecksOnly({"recovery": {}}).step(make_ctx(flags=["camera:CAM_FRONT:low_match"]))["checks_only"]
+    assert out.recovery.final_state == "degraded" and out.recovery.isolated_sensors == ["camera:CAM_FRONT"]
+    assert out.alarm and out.pred_sensor == "camera:CAM_FRONT" and out.action.action == "slow_down"
+
+
+def test_checks_only_blames_the_most_flagged_sensor():
+    flags = ["camera:CAM_FRONT:low_match", "lidar:low_points", "lidar:sector_gap"]
+    out = ChecksOnly({"recovery": {}}).step(make_ctx(flags=flags))["checks_only"]
+    assert out.pred_sensor == "lidar" and out.action.action == "stop"  # front camera and LiDAR both isolated
+
+
+def test_checks_only_agent_fault_has_no_effect():
+    a2 = AgentFaultState("A2", "low", {"n_affected": 1})
+    out = ChecksOnly({"recovery": {}}).step(make_ctx(agent_fault=a2))["checks_only"]
+    assert out.extra["agent_recovered"] and not out.alarm
+
+
+def test_vlm_free_methods():
+    assert [m.names for m in build_methods(["B0", "checks_only"], None, {"recovery": {}})] == [("B0",), ("checks_only",)]
+    assert not needs_vlm(["B0", "checks_only"], "none")
+    assert needs_vlm(["checks_only", "ours_full"], "none") and needs_vlm(["checks_only"], "qwen_grounding")

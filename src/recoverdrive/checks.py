@@ -247,6 +247,13 @@ def flags_by_sensor(flags: list[str]) -> dict[str, list[str]]:
     return out
 
 
+def rank_sensors(flags: list[str]) -> list[str]:
+    """Sensors with fault flags, most flags first, ties by name ('agent' and no_reference flags are ignored)."""
+    groups = flags_by_sensor(flags)
+    groups.pop("agent", None)
+    return sorted(groups, key=lambda s: (-len(groups[s]), s))
+
+
 @dataclass
 class CheckOutput:
     report: CheckReport
