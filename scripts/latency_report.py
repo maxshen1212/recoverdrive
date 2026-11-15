@@ -1,7 +1,7 @@
 """E4 latency breakdown (spec §5.3) from the controlled runs (fresh cache, 1 worker, methods sequential).
 
-Usage: uv run python scripts/latency_report.py --ours e4_ours --baselines e4_baselines
-Writes outputs/e4/latency.md and latency.json. The first frame of each run is dropped (model loading, warm-up).
+Usage: uv run python scripts/latency_report.py --ours e4_ours --baselines e4_baselines [--out outputs/e4]
+Writes <out>/latency.md and latency.json (--baselines none: Ours only). The first frame of each run is dropped (model loading, warm-up).
 """
 
 import argparse
@@ -32,7 +32,8 @@ def stats(x) -> dict:
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--ours", default="e4_ours")
-    p.add_argument("--baselines", default="e4_baselines")
+    p.add_argument("--baselines", default="e4_baselines", help="run tag of B1-B3, or 'none'")
+    p.add_argument("--out", default="outputs/e4", help="output folder")
     args = p.parse_args()
     ours = records(args.ours)
     comp = {c: [] for c in COMPONENTS}
@@ -55,8 +56,8 @@ def main():
     mean_total = float(np.mean(total_full))
     rows = [{"component": c, **stats(v), "share": float(np.mean(v)) / mean_total} for c, v in comp.items()]
 
-    base = records(args.baselines)
-    caption, totals = [], {"B1": [], "B2": [], "B3": []}
+    base = [] if args.baselines == "none" else records(args.baselines)
+    caption, totals = [], {} if args.baselines == "none" else {"B1": [], "B2": [], "B3": []}
     for r in base:
         lat, m = r["latency_s"], r["methods"]
         own = {k: m[k]["extra"]["attempts"][0]["latency_s"] for k in totals}
@@ -78,8 +79,9 @@ def main():
         markdown_table(rows, ["component", "mean", "median", "p90", "share"]), "",
         f"Frames with a deterministic flag (VLM needed under the gate): {np.mean(flagged):.3f}", "",
         "## Per-frame latency by method", "", markdown_table(method_rows, ["method", "mean", "median", "p90"]), "",
-        f"Shared caption time of B1-B3 (6 cameras, parallel): mean {np.mean(caption):.2f} s"])
-    out = Path("outputs/e4")
+        (f"Shared caption time of B1-B3 (6 cameras, parallel): mean {np.mean(caption):.2f} s" if caption
+         else "No baseline run in this report.")])
+    out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "latency.md").write_text(text + "\n")
     fl, mt = np.array(flagged), np.array(method_t)
@@ -87,7 +89,7 @@ def main():
     (out / "latency.json").write_text(json.dumps({"git": git_state(Path(__file__).resolve().parent.parent),
                                                   "components": rows, "methods": method_rows,
                                                   "flagged_share": float(fl.mean()),
-                                                  "caption_mean": float(np.mean(caption)),
+                                                  "caption_mean": float(np.mean(caption)) if caption else None,
                                                   "pre_vlm_mean": pre_mean,
                                                   "method_flagged_mean": float(mt[fl].mean()),
                                                   "method_unflagged_mean": float(mt[~fl].mean())}))

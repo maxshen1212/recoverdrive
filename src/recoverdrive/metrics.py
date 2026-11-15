@@ -218,3 +218,10 @@ def difficulty_table(records: list[dict], methods: list[str],
                          "rec_success": e2["rec_success"]})
     return rows
 
+
+def latency_estimates(pre_vlm_mean: float, flagged_mean: float, unflagged_mean: float, flag_share: float) -> dict:
+    """Per-frame latency re-weighted to a split's share of flagged frames: 'full' calls the VLM on every frame,
+    'gated' only on flagged frames (spec §4.2 latency optimization)."""
+    return {"full": pre_vlm_mean + flag_share * flagged_mean + (1 - flag_share) * unflagged_mean,
+            "gated": pre_vlm_mean + flag_share * flagged_mean}
+

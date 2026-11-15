@@ -9,6 +9,7 @@ from recoverdrive.metrics import (
     difficulty_table,
     e1_counts,
     e1_table,
+    latency_estimates,
     markdown_table,
 )
 from recoverdrive.runner import RunSpec, check_test_allowed, git_state, run_all, run_paths, run_status
@@ -114,3 +115,8 @@ def test_difficulty_table_uses_fault_frames_only():
     rows = {r["difficulty"]: r for r in difficulty_table(recs, ["m"], recovery_methods=())}
     assert rows["easy"]["R"] == 1.0 and rows["easy"]["sensor_acc"] == 1.0
     assert rows["hard"]["R"] == 0.0 and rows["all"]["n_fault"] == 2
+
+
+def test_latency_estimates():
+    est = latency_estimates(pre_vlm_mean=1.0, flagged_mean=4.0, unflagged_mean=3.0, flag_share=0.25)
+    assert est == {"full": pytest.approx(4.25), "gated": pytest.approx(2.0)}

@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap
 
-from recoverdrive.metrics import aggregate_seeds, e1_table, e2_table, fmt, markdown_table
+from recoverdrive.metrics import aggregate_seeds, e1_table, e2_table, fmt, latency_estimates, markdown_table
 from recoverdrive.runner import RunSpec, load_records
 
 OUT = Path("report_figures")
@@ -274,9 +274,8 @@ def main():
     flag_share = 1 - next(c for c in replay["calls"] if "gate" in c["method"])["frames_without_vlm"]
     lat = json.loads(Path("outputs/e4/latency.json").read_text())
     # Re-weight the measured per-frame times by the test split's flag rate (30 % of frames carry a flag there).
-    full_test = (lat["pre_vlm_mean"] + flag_share * lat["method_flagged_mean"]
-                 + (1 - flag_share) * lat["method_unflagged_mean"])
-    gated_test = lat["pre_vlm_mean"] + flag_share * lat["method_flagged_mean"]
+    est = latency_estimates(lat["pre_vlm_mean"], lat["method_flagged_mean"], lat["method_unflagged_mean"], flag_share)
+    full_test, gated_test = est["full"], est["gated"]
     summary["e4"] = {**lat, "test_flag_share": flag_share, "full_latency_test_estimate": full_test,
                      "gated_latency_test_estimate": gated_test}
     fig_e4(lat, full_test, gated_test)
