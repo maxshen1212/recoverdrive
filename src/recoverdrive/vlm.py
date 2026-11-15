@@ -407,6 +407,7 @@ def parse_diagnosis(raw: str, schema: dict) -> Diagnosis | None:
 
 
 # --- B1-B3: DriveAgent-style text chain (prompts from github.com/Paparare/DriveAgent, vehicle_prompts.json) --------------------------
+# The prompts below are adapted from DriveAgent (MIT License, Copyright (c) 2025 Faceia); see THIRD_PARTY_NOTICES.md.
 
 CAPTION_SYSTEM = (
     "You are a visual perception assistant for an autonomous vehicle. Describe what this camera image shows "

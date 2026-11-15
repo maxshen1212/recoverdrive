@@ -6,6 +6,18 @@ controller isolates it, and a rule-based shield picks *continue*, *slow_down* or
 with injected faults and in CARLA. The project builds on DriveAgent ([Hou et al., 2025](https://arxiv.org/abs/2505.02123));
 its text-chain reasoning is re-implemented here as baselines B1–B3.
 
+<p align="center"><img src="docs/media/architecture.png" width="560" alt="RecoverDrive architecture: nuScenes or CARLA, fault injector, LiDAR objects and SAM 3, consistency checks, Qwen3-VL diagnosis, recovery controller, rule-based safety shield"></p>
+
+## Results and next steps
+
+On the nuScenes-mini test split (10 injected fault types, 3 seeds), RecoverDrive reaches F1 0.77 with a 12 %
+false-alarm rate; the DriveAgent-style baselines on the same model reach 0.58–0.61 with 35–85 % false alarms. In
+CARLA, a faulty front camera caused a collision in 7 of 12 runs without the monitor and in 0 of 12 with it.
+
+These are course-project results with known limits, such as an oracle LiDAR detector and only 4 test scenes.
+**The plan to address them and turn this into a paper is in [FutureWork.md](FutureWork.md).** Related work is
+surveyed in [docs/related-work.md](docs/related-work.md).
+
 ## Demo
 
 CARLA, same route and seed. While a pedestrian crosses, the front camera shows the rear view (fault C1); the inset
@@ -51,7 +63,10 @@ scripts/            entry points (run_eval.py, run_e3.py, ...) and setup helpers
 configs/            eval.yaml (frozen settings), splits.yaml (dev/test scenes), e3.yaml (CARLA overrides)
 serving/            separate uv project that only holds vLLM
 tests/              unit tests (pytest)
-docs/superpowers/   design spec (in Traditional Chinese), plans, run logs
+docs/media/         demo GIFs and the architecture diagram
+docs/related-work.md  related-work survey (2025–2026)
+docs/superpowers/   design spec (in Traditional Chinese), plans, run logs, results provenance
+FutureWork.md       next steps toward a paper
 ```
 
 ## Setup
@@ -61,7 +76,7 @@ Run every command from the repository root.
 **1. Clone and set the environment.** `scripts/env.sh` must be sourced in every new shell.
 
 ```bash
-git clone git@github.com:maxshen1212/recoverdrive.git && cd recoverdrive
+git clone https://github.com/maxshen1212/recoverdrive.git && cd recoverdrive
 export UV_CACHE_DIR=~/.cache/uv     # only if you have no /data disk (env.sh defaults to /data/$USER/.cache/uv)
 export HF_HOME=~/.cache/huggingface # optional: where model weights go (~21 GB)
 source scripts/env.sh
@@ -150,6 +165,7 @@ The CARLA Python client is installed by `uv sync`. `carla_server.sh` needs the N
 | E5 component ablations | add `--ablation no_checks` or `--ablation qwen_grounding` to the main-experiment command, with `--methods ours_detect ours_full` |
 | E5 model ablations | serve the model with `VLM_MODEL=Qwen/Qwen3-VL-4B-Instruct VLM_SERVED_NAME=qwen3-vl-4b-instruct VLM_GPU_UTIL=0.4 ./scripts/serve_vlm.sh`, then add `--vlm-model qwen3-vl-4b-instruct` (Thinking: `Qwen/Qwen3-VL-8B-Thinking`, served with `--reasoning-parser qwen3`, run with `--vlm-max-tokens 4096`) |
 | Figures and tables | `uv run python scripts/make_figures.py` (writes `report_figures/`) |
+| Architecture diagram | `uv run python scripts/make_architecture_figure.py` (writes `docs/media/architecture.png`) |
 | Demo GIFs | `uv run python scripts/run_e3.py --methods B0 ours_full --conditions C1 --seeds 0 --only-route 1 --record --tag demo`, then `uv run python scripts/make_demo_gif.py outputs/e3/demo/<run>_frames docs/media/<name>.gif --start 3 --end 24` |
 
 Results go to `outputs/` and `report_figures/` (not tracked). Lint: `uv run ruff check src tests scripts`.
@@ -166,3 +182,8 @@ This project builds on DriveAgent:
   year    = {2025}
 }
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE). The B1–B3 prompts are adapted from DriveAgent (MIT License); see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
