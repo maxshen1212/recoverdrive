@@ -185,3 +185,36 @@ def e2_table(records: list[dict], methods: list[str], faults: list[str],
             recs = [r for r in records if f == "all" or r["run_fault"] == f]
             rows.append({"method": m, "fault": f, **e2_counts(method_frames(recs, m), m in recovery_methods)})
     return rows
+
+
+# --- Easy vs. hard faults (FutureWork Step 1) ---------------------------------------------------------------
+
+EASY_ANY_SEVERITY = ("L4", "A1", "A3")  # caught by a point count, or by JSON validation that every VLM method has
+
+
+def difficulty(label: dict) -> str | None:
+    """'easy' for L4, A1, A3 and high-severity L1; 'hard' for every other fault; None for clean frames."""
+    fault = label["fault_id"]
+    if fault == "none":
+        return None
+    if fault in EASY_ANY_SEVERITY or (fault == "L1" and label.get("severity") == "high"):
+        return "easy"
+    return "hard"
+
+
+def difficulty_table(records: list[dict], methods: list[str],
+                     recovery_methods: tuple[str, ...] = RECOVERY_METHODS) -> list[dict]:
+    """Recall, sensor accuracy, missed fallback and recovery success on fault frames, split by difficulty
+    (seeds pooled)."""
+    rows = []
+    for m in methods:
+        for diff in ("easy", "hard", "all"):
+            pairs = [(r, o) for r, o in method_frames(records, m)
+                     if difficulty(r["label"]) is not None and (diff == "all" or difficulty(r["label"]) == diff)]
+            e1 = e1_counts(pairs)
+            e2 = e2_counts(pairs, m in recovery_methods)
+            rows.append({"method": m, "difficulty": diff, "n_fault": e1["n_fault"], "R": e1["R"],
+                         "sensor_acc": e1["sensor_acc"], "missed_fault": e2["missed_fault"],
+                         "rec_success": e2["rec_success"]})
+    return rows
+

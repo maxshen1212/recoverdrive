@@ -3,7 +3,14 @@ import subprocess
 
 import pytest
 
-from recoverdrive.metrics import aggregate_seeds, e1_counts, e1_table, markdown_table
+from recoverdrive.metrics import (
+    aggregate_seeds,
+    difficulty,
+    difficulty_table,
+    e1_counts,
+    e1_table,
+    markdown_table,
+)
 from recoverdrive.runner import RunSpec, check_test_allowed, git_state, run_all, run_paths, run_status
 
 
@@ -81,3 +88,29 @@ def test_git_state_clean_dirty_and_outside(tmp_path):
     (repo / "f.txt").write_text("b")
     assert git_state(repo)["dirty"] is True
     assert git_state(tmp_path) == {"commit": None, "dirty": None}
+
+
+def _label(fault, severity, sensor="x"):
+    return {"fault_id": fault, "sensor": sensor, "severity": severity, "episode_id": 0}
+
+
+def test_difficulty_rules():
+    assert difficulty({"fault_id": "none", "sensor": "none", "severity": None, "episode_id": None}) is None
+    easy = [("L4", "high"), ("L1", "high"), ("A1", "low"), ("A3", "medium")]
+    hard = [("L1", "medium"), ("A2", "high"), ("C1", "high"), ("L2", "high")]
+    assert [difficulty(_label(f, s)) for f, s in easy] == ["easy"] * 4
+    assert [difficulty(_label(f, s)) for f, s in hard] == ["hard"] * 4
+
+
+def test_difficulty_table_uses_fault_frames_only():
+    def rec(fault, severity, sensor, alarm, pred):
+        return {"scene": "s", "seed": 0, "frame_idx": 0, "run_fault": fault, "label": _label(fault, severity, sensor),
+                "methods": {"m": {"alarm": alarm, "pred_sensor": pred, "action": {"action": "stop"}}}}
+
+    clean = {"scene": "s", "seed": 0, "frame_idx": 2, "run_fault": "C2",
+             "label": {"fault_id": "none", "sensor": "none", "severity": None, "episode_id": None},
+             "methods": {"m": {"alarm": True, "pred_sensor": "lidar", "action": {"action": "stop"}}}}
+    recs = [rec("L4", "high", "lidar", True, "lidar"), rec("C2", "low", "camera:CAM_FRONT", False, "none"), clean]
+    rows = {r["difficulty"]: r for r in difficulty_table(recs, ["m"], recovery_methods=())}
+    assert rows["easy"]["R"] == 1.0 and rows["easy"]["sensor_acc"] == 1.0
+    assert rows["hard"]["R"] == 0.0 and rows["all"]["n_fault"] == 2
