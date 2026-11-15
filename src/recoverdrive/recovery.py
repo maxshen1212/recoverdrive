@@ -71,10 +71,24 @@ class RecoveryController:
             suspects, conf = (set(flagged) & {diag.sensor}) or set(flagged), min(diag.confidence, tau - 1e-9)
         else:
             suspects = set()
+        return self._resolve(suspects, conf, flagged, steps, not agent_ok or diag is None, diag)
 
+    def step_suspects(self, suspects: set[str], conf: float, flagged: set[str], steps: list[str]) -> RecoveryResult:
+        """One round for a monitor without a VLM: the caller supplies the suspected sensors and the confidence.
+        Same re-observe / isolate / verify logic as `step`; the agent is never isolated."""
+        steps = list(steps)
+        flagged = set(flagged) - {"agent"}
+        if not self.cfg.reobserve:
+            self.isolated, self.suspected_prev = {}, set()
+        return self._resolve(set(suspects) - {"agent"}, conf, flagged, steps, False, None)
+
+    def _resolve(self, suspects: set[str], conf: float, flagged: set[str], steps: list[str], agent_failed: bool,
+                 diag: Diagnosis | None) -> RecoveryResult:
+        """Re-observe, isolate and verify, given this frame's suspects (shared by `step` and `step_suspects`)."""
+        tau = self.cfg.conf_threshold
         if not self.cfg.isolate:  # ablation: nothing can be isolated, so any suspicion or agent failure stops
             self.suspected_prev = suspects
-            unresolved = bool(suspects) or not agent_ok or diag is None
+            unresolved = bool(suspects) or agent_failed
             return RecoveryResult(steps_taken=steps, final_state="unresolved" if unresolved else "healthy",
                                   isolated_sensors=[], final_diagnosis=diag)
 
@@ -100,7 +114,7 @@ class RecoveryController:
         self.suspected_prev = suspects
 
         isolated = sorted(self.isolated)
-        if not agent_ok or diag is None:
+        if agent_failed:
             isolated = sorted({*isolated, "agent"})
         # Verify: the remaining sensors must be consistent, and the isolation confident.
         remaining_flagged = flagged - set(isolated)

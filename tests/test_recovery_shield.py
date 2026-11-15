@@ -139,3 +139,24 @@ def test_controller_no_reobserve():
     weak = RecoveryController(RecoveryConfig(reobserve=False))
     weak.step(d("fault", "lidar", 1 / 3), True, {"lidar"}, [])
     assert weak.step(d("fault", "lidar", 1 / 3), True, {"lidar"}, []).final_state == "unresolved"  # never promoted
+
+
+def test_step_suspects_isolates_every_suspect():
+    c = RecoveryController()
+    r = c.step_suspects({"camera:CAM_FRONT", "lidar"}, 1.0, {"camera:CAM_FRONT", "lidar"}, ["rules"])
+    assert r.final_state == "degraded" and r.isolated_sensors == ["camera:CAM_FRONT", "lidar"]
+    assert r.final_diagnosis is None
+
+
+def test_step_suspects_low_confidence_needs_two_frames():
+    c = RecoveryController()
+    assert c.step_suspects({"lidar"}, 0.5, {"lidar"}, []).final_state == "unresolved"  # pending
+    r = c.step_suspects({"lidar"}, 0.5, {"lidar"}, [])
+    assert r.final_state == "degraded" and r.isolated_sensors == ["lidar"]
+
+
+def test_step_suspects_restores_after_clean_frame():
+    c = RecoveryController()
+    c.step_suspects({"lidar"}, 1.0, {"lidar"}, [])
+    r = c.step_suspects(set(), 1.0, set(), [])
+    assert r.final_state == "healthy" and r.isolated_sensors == []
