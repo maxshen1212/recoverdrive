@@ -45,7 +45,10 @@ Medium cost: new VLM runs.
 | B1–B3 with check numbers | Give the DriveAgent-style baselines the same check report as Ours. | How much comes from the evidence, and how much from prompt engineering? |
 | B1–B3 prompts tuned | Tune the baseline prompts on the dev scenes with the same budget as Ours (4 versions). | Answers "only Ours was tuned". |
 | PRAM-R-style baseline | The VLM gets per-sensor quality indicators (brightness, point density) instead of cross-sensor checks. | How do we compare with the closest related work? |
-| Larger E3 | Add a second fault type (L1 or A2) and double the runs to 24 per cell. | Does the closed-loop result hold beyond one fault and 12 runs? |
+| Larger E3 | Add a second front-camera fault (C3: an all-black front camera during the hazard) and double the runs to 24 per cell. | Does the closed-loop result hold beyond one fault and 12 runs? |
+
+Detailed implementation plans: `docs/superpowers/plans/2026-11-15-step1-report-completeness.md` (Step 1) and
+`docs/superpowers/plans/2026-11-15-step2-fair-comparison.md` (Step 2).
 
 ## Step 3: paper-level experiments
 
