@@ -1,9 +1,10 @@
 import json
+import subprocess
 
 import pytest
 
 from recoverdrive.metrics import aggregate_seeds, e1_counts, e1_table, markdown_table
-from recoverdrive.runner import RunSpec, check_test_allowed, run_all, run_paths, run_status
+from recoverdrive.runner import RunSpec, check_test_allowed, git_state, run_all, run_paths, run_status
 
 
 def rec(fault, sensor, alarm, pred, run_fault="C1", seed=0, severity="high"):
@@ -62,3 +63,21 @@ def test_runner_refuses_unfrozen_test(tmp_path):
         check_test_allowed({"frozen": False}, tmp_path, git_status=lambda p: "")
     with pytest.raises(RuntimeError, match="uncommitted"):
         check_test_allowed({"frozen": True}, tmp_path, git_status=lambda p: " M configs/eval.yaml\n")
+
+
+def test_git_state_clean_dirty_and_outside(tmp_path):
+    repo = tmp_path / "r"
+    repo.mkdir()
+
+    def git(*args):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+
+    git("init", "-q")
+    (repo / "f.txt").write_text("a")
+    git("add", "f.txt")
+    git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "x")
+    state = git_state(repo)
+    assert len(state["commit"]) == 40 and state["dirty"] is False
+    (repo / "f.txt").write_text("b")
+    assert git_state(repo)["dirty"] is True
+    assert git_state(tmp_path) == {"commit": None, "dirty": None}

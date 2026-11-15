@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from recoverdrive.metrics import markdown_table
+from recoverdrive.runner import git_state
 
 COMPONENTS = ["load", "sam3", "checks", "render", "vlm_first", "vlm_reask", "vlm_samples", "recovery"]
 
@@ -83,7 +84,8 @@ def main():
     (out / "latency.md").write_text(text + "\n")
     fl, mt = np.array(flagged), np.array(method_t)
     pre_mean = float(np.mean(total_full) - np.mean(mt))
-    (out / "latency.json").write_text(json.dumps({"components": rows, "methods": method_rows,
+    (out / "latency.json").write_text(json.dumps({"git": git_state(Path(__file__).resolve().parent.parent),
+                                                  "components": rows, "methods": method_rows,
                                                   "flagged_share": float(fl.mean()),
                                                   "caption_mean": float(np.mean(caption)),
                                                   "pre_vlm_mean": pre_mean,

@@ -38,12 +38,13 @@ from recoverdrive.methods import FrameContext, build_methods
 from recoverdrive.metrics import markdown_table
 from recoverdrive.recording import JsonlWriter
 from recoverdrive.render import camera_mosaic, lidar_bev
-from recoverdrive.runner import frame_seed, points_in_ego, sensors_of
+from recoverdrive.runner import frame_seed, git_state, points_in_ego, sensors_of
 from recoverdrive.shield import acceptable_actions, ttc_override
 from recoverdrive.types import Action, FaultLabel, Pose
 from recoverdrive.vlm import VLMClient, healthy_servers, image_part, summarize_checks
 
 IDENTITY = Pose(np.array([1.0, 0, 0, 0]), np.zeros(3))
+REPO = Path(__file__).resolve().parent.parent
 TM_PORT = 8100  # the TM default (8000) is taken by vLLM; --tm-port changes it per process
 
 
@@ -492,7 +493,7 @@ def main():
     TM_PORT = args.tm_port
     out_dir = Path("outputs/e3") / args.tag
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "meta.json").write_text(json.dumps({"args": vars(args), "config": cfg}, indent=2))
+    (out_dir / "meta.json").write_text(json.dumps({"args": vars(args), "config": cfg, "git": git_state(REPO)}, indent=2))
 
     cache = KVCache(cfg["cache"])
     s = cfg["sam3"]

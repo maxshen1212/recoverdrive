@@ -19,7 +19,7 @@ from recoverdrive.checks import flagged_sensors
 from recoverdrive.methods import full_outcome, same_verdict
 from recoverdrive.metrics import aggregate_seeds, e1_table, e2_table, markdown_table
 from recoverdrive.recovery import RecoveryConfig, RecoveryController, vote
-from recoverdrive.runner import sensors_of
+from recoverdrive.runner import git_state, sensors_of
 from recoverdrive.shield import shield
 from recoverdrive.types import Diagnosis
 from recoverdrive.vlm import ours_schema, to_diagnosis, validate_json
@@ -133,7 +133,8 @@ def main():
         "## E2 by fault", "", markdown_table(e2_all, E2_COLS)])
     out = root / "ablation_replay.md"
     out.write_text(text + "\n")
-    (root / "ablation_replay.json").write_text(json.dumps({"e1": e1_all, "e2": e2_all, "calls": rows_calls}))
+    (root / "ablation_replay.json").write_text(json.dumps({"git": git_state(Path(__file__).resolve().parent.parent), "e1": e1_all, "e2": e2_all,
+                                                         "calls": rows_calls}))
     print(text.split("## E1 by fault")[0])
     print(f"written {out}")
     return 0

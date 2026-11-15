@@ -94,6 +94,18 @@ def check_test_allowed(cfg: dict, repo_root: Path, git_status: Callable[[Path], 
                           check=False).stdout.strip()
 
 
+def git_state(repo_root: Path) -> dict:
+    """HEAD commit and whether tracked files differ from it (same rule as check_test_allowed). Never raises:
+    outside a git repository both values are None."""
+    try:
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_root, capture_output=True, text=True, check=True)
+        status = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=repo_root,
+                                capture_output=True, text=True, check=True)
+    except (OSError, subprocess.CalledProcessError):
+        return {"commit": None, "dirty": None}
+    return {"commit": head.stdout.strip(), "dirty": bool(status.stdout.strip())}
+
+
 def points_in_ego(frame) -> np.ndarray:
     """LiDAR points in the ego frame (x forward, y left), for the top view."""
     if frame.lidar is None or len(frame.lidar.points) == 0:

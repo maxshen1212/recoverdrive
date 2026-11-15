@@ -23,7 +23,7 @@ from recoverdrive.detectors.qwen_grounding import QwenGroundingDetector
 from recoverdrive.detectors.sam3 import CachedDetector
 from recoverdrive.faults import ALL_FAULTS
 from recoverdrive.metrics import aggregate_seeds, e1_recall_by_severity, e1_table, e2_table, markdown_table
-from recoverdrive.runner import EvalEnv, RunSpec, check_test_allowed, load_records, run_all
+from recoverdrive.runner import EvalEnv, RunSpec, check_test_allowed, git_state, load_records, run_all
 from recoverdrive.vlm import VLMClient, healthy_servers
 
 REPO = Path(__file__).resolve().parent.parent
@@ -101,7 +101,7 @@ def main():
 
     out = Path(cfg["output"]["root"]) / args.tag
     out.mkdir(parents=True, exist_ok=True)
-    meta = {"args": vars(args), "config": cfg, "commit": commit}
+    meta = {"args": vars(args), "config": cfg, "commit": commit, "git": git_state(REPO)}
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
 
     cache = KVCache(cfg["cache"])
