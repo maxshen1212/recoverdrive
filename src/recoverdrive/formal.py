@@ -8,13 +8,15 @@ property either holds on all cases or comes back with the first counterexample.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import asdict, dataclass
 from itertools import chain, combinations
 
 from recoverdrive.faults import AGENT_FAULTS, FIXED_HIGH, SENSOR_FAULTS, SEVERITIES
+from recoverdrive.recovery import RecoveryConfig, RecoveryController
 from recoverdrive.requirements import NUSCENES_SENSORS
 from recoverdrive.shield import ACTIONS, FRONT_SENSORS, acceptable_actions, shield, ttc_override
-from recoverdrive.types import Action, FaultLabel, RecoveryResult
+from recoverdrive.types import Action, Diagnosis, FaultLabel, RecoveryResult
 
 SENSORS_ALL = NUSCENES_SENSORS
 STATES = ("healthy", "degraded", "unresolved")
@@ -144,4 +146,113 @@ def verify_shield() -> list[PropertyResult]:
                       "Expected to fail.", s6b()),
         _check("S7", "Misattribution tolerance: on any fault frame, isolating exactly one sensor, even the wrong one, "
                      "gives an acceptable action.", s7()),
+    ]
+
+
+# --- recovery controller: explicit-state model checking -------------------------------------------------------------
+
+# Two front and two non-front sensors. The controller never looks at sensor names (only at the sets it is given) and
+# the shield only checks membership in FRONT_SENSORS, so these four cover every role combination of the 7 sensors.
+DEFAULT_CONTROLLER_SENSORS = ("camera:CAM_FRONT", "lidar", "camera:CAM_BACK", "camera:CAM_FRONT_LEFT")
+
+
+@dataclass
+class ControllerGraph:
+    """Reachable states and every transition. A state is (sorted isolated items, sorted suspected_prev). An input is
+    (kind, sensor, conf, flagged) with kind in none (the agent failed) / ok / uncertain / fault. An edge is
+    (src, input, dst, final_state, isolated_sensors, isolated_agent_step)."""
+    states: list[tuple]
+    edges: list[tuple]
+
+
+def _state(rc: RecoveryController) -> tuple:
+    return tuple(sorted(rc.isolated.items())), tuple(sorted(rc.suspected_prev))
+
+
+def _inputs(sensors: tuple[str, ...], confs: tuple[float, ...]) -> list[tuple]:
+    flagged_sets = subsets(sensors)
+    diags = [("none", "none", 0.0)] + [("ok", "none", c) for c in confs]
+    diags += [(k, s, c) for k in ("uncertain", "fault") for s in sensors for c in confs]
+    return [(k, s, c, fl) for k, s, c in diags for fl in flagged_sets]
+
+
+def _step(cfg: RecoveryConfig, state: tuple, inp: tuple) -> tuple[RecoveryController, RecoveryResult]:
+    rc = RecoveryController(cfg, isolated=dict(state[0]), suspected_prev=set(state[1]))
+    kind, sensor, conf, flagged = inp
+    diag = None if kind == "none" else Diagnosis(kind, sensor, conf)
+    return rc, rc.step(diag, kind != "none", set(flagged), [])
+
+
+def explore_controller(sensors: tuple[str, ...], cfg: RecoveryConfig, confs: tuple[float, ...] = (0.5, 1.0),
+                       max_states: int = 100_000) -> ControllerGraph:
+    """Breadth-first search over every state the real controller can reach from its initial state."""
+    inputs = _inputs(sensors, confs)
+    start = ((), ())
+    seen, queue, edges = {start}, deque([start]), []
+    while queue:
+        src = queue.popleft()
+        for inp in inputs:
+            rc, res = _step(cfg, src, inp)
+            dst = _state(rc)
+            edges.append((src, inp, dst, res.final_state, tuple(res.isolated_sensors),
+                          "isolate:agent" in res.steps_taken))
+            if dst not in seen:
+                if len(seen) >= max_states:
+                    raise RuntimeError(f"more than {max_states} states")
+                seen.add(dst)
+                queue.append(dst)
+    return ControllerGraph(sorted(seen), edges)
+
+
+def verify_controller(graph: ControllerGraph, cfg: RecoveryConfig) -> list[PropertyResult]:
+    tau = cfg.conf_threshold
+
+    def cex(e) -> dict:
+        src, inp, _dst, state, iso, _ = e
+        return {"from_isolated": dict(src[0]), "from_suspected": list(src[1]),
+                "input": {"diagnosis": inp[0], "sensor": inp[1], "conf": inp[2], "flagged": list(inp[3])},
+                "final_state": state, "isolated_sensors": list(iso)}
+
+    def c1():
+        for e in graph.edges:
+            kind, s, conf, _ = e[1]
+            if kind == "fault" and conf >= tau:
+                yield s in e[4], cex(e)
+
+    def c2():
+        for e in graph.edges:
+            for s in set(e[0][1]) & set(e[2][1]):  # suspected before and in this step
+                yield s in e[4], cex(e)
+
+    def c3():
+        for e in graph.edges:
+            for s, _ in e[0][0]:
+                if s not in e[1][3] and s not in e[2][1]:  # not flagged and not suspected in this step
+                    yield s not in e[4], cex(e)
+
+    def c4():
+        for e in graph.edges:
+            if e[1][0] == "none":
+                yield "agent" in e[4] and e[5], cex(e)
+
+    def c5():
+        for e in graph.edges:
+            if e[3] == "degraded":
+                yield set(e[1][3]) <= set(e[4]) and all(v >= tau for _, v in e[2][0]), cex(e)
+
+    def c6():
+        for e in graph.edges:
+            if e[3] == "healthy":
+                yield e[4] == (), cex(e)
+
+    return [
+        _check("C1", "Confident isolation: a fault diagnosis on s with confidence >= tau isolates s in that step.",
+               c1()),
+        _check("C2", "Persistence: a sensor suspected in two consecutive steps is isolated.", c2()),
+        _check("C3", "Restoration: an isolated sensor that is neither flagged nor suspected is restored.", c3()),
+        _check("C4", "Agent fallback: when the VLM gives no valid answer, the agent is isolated and the deterministic "
+                     "flags decide.", c4()),
+        _check("C5", "Verify soundness: degraded means every flagged sensor is isolated and every isolation has "
+                     "confidence >= tau.", c5()),
+        _check("C6", "Healthy soundness: healthy means nothing is isolated.", c6()),
     ]
