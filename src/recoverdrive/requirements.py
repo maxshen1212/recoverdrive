@@ -13,7 +13,7 @@ Integer and boolean signals are compared against half-step thresholds (for examp
 | R2 | no unnecessary fallback                           | G( a <= allow )                                           |
 | R3 | back to continue within 2 steps after a fault     | G( fault_end -> F[0,2] (a = continue or fault) )          |
 | R4 | front-camera fault: slow down within 3 s (CARLA)  | G( front_onset -> F[0,6] (speed <= 3.06 m/s) )            |
-| R5 | TTC < 2 s -> stop within 1 step; no collision     | G( (ttc_low -> F[0,1] (a = stop)) and gap >= 0 )          |
+| R5 | TTC < 2 s -> stop within 1 step; no collision     | G( (ttc_low -> F[0,1] (a_final = stop)) and gap >= 0 )    |
 | R6 | no sensor restored while still faulty (each s)    | G( (fault_s and iso_s) -> X (iso_s or not fault_s) )      |
 """
 
@@ -37,7 +37,10 @@ from recoverdrive.types import FaultLabel
 
 ACTION_RANK = {a: i for i, a in enumerate(ACTIONS)}
 NUSCENES_SPECS = ("R1", "R2", "R3", "R6")
-CARLA_SPECS = ("R1", "R2", "R4", "R5")
+CARLA_SPECS = ("R1", "R2", "R4", "R5", "R6")
+NUSCENES_SENSORS = ("camera:CAM_FRONT", "camera:CAM_FRONT_LEFT", "camera:CAM_FRONT_RIGHT", "camera:CAM_BACK",
+                    "camera:CAM_BACK_LEFT", "camera:CAM_BACK_RIGHT", "lidar")
+CARLA_SENSORS = ("camera:CAM_FRONT", "camera:CAM_BACK", "lidar")
 STEP_S = 0.5
 RECOVERY_STEPS = 2  # R3
 FRONT_REACTION_STEPS = 6  # R4: 3 s
@@ -59,7 +62,7 @@ def spec(name: str, sensors: tuple[str, ...] = (), grace: int = 1) -> Formula:
         return Implies(Pred("front_onset", ">=", on),
                        Eventually(0, FRONT_REACTION_STEPS, Pred("speed", "<=", SLOW_SPEED_MPS)))
     if name == "R5":
-        return And(Implies(Pred("ttc_low", ">=", on), Eventually(0, 1, Pred("a", ">=", 1.5))),
+        return And(Implies(Pred("ttc_low", ">=", on), Eventually(0, 1, Pred("a_final", ">=", 1.5))),
                    Pred("gap", ">=", 0.0))
     if name == "R6":
         if not sensors:
@@ -106,12 +109,14 @@ def nuscenes_trace(records: list[dict], method: str,
 def carla_trace(steps: list[dict], summary: dict,
                 sensors: tuple[str, ...] = ()) -> tuple[dict[str, np.ndarray], int]:
     """Trace of one CARLA run from its step log and its summary, and the number of steps skipped (none so far).
-    `gap` is the per-step `gap_m` when logged; older logs only know whether the run collided, which then counts as
-    gap -1 at the last step."""
+    `a` is the monitor's action (`monitor_action`, before the vehicle's TTC brake), which R1/R2 judge; `a_final` is
+    the applied action, which R5 judges. `gap` is the per-step `gap_m` when logged; older logs only know whether the
+    run collided, which then counts as gap -1 at the last step."""
     steps = sorted(steps, key=lambda s: s["step"])
     labels = [s["label"] for s in steps]
     fault = [lab["fault_id"] != "none" for lab in labels]
-    tr = _common([s["action"] for s in steps], [s["acceptable"] for s in steps], fault)
+    tr = _common([s.get("monitor_action", s["action"]) for s in steps], [s["acceptable"] for s in steps], fault)
+    tr["a_final"] = np.array([ACTION_RANK[s["action"]] for s in steps], float)
     front = np.array([f and lab["sensor"] == "camera:CAM_FRONT" for f, lab in zip(fault, labels)], float)
     onset = front.copy()
     onset[1:] = (front[1:] > 0) & (front[:-1] == 0)

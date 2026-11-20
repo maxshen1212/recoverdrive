@@ -118,14 +118,20 @@ class SpecResult:
     worst_t: int | None  # first step with the lowest robustness
 
 
-def check_always(phi: Formula, trace: Mapping[str, np.ndarray]) -> SpecResult:
-    """G(phi) over the trace: phi is evaluated at every step whose window fits in the trace. A top-level And is split
-    (G(p and q) = G(p) and G(q)), so each conjunct is checked up to its own horizon: a conjunct without look-ahead is
-    still checked at the last step."""
+def series(phi: Formula, trace: Mapping[str, np.ndarray]) -> np.ndarray:
+    """Robustness of each obligation of G(phi): entry t is phi at step t, for every step whose window fits in the
+    trace. A top-level And is split (G(p and q) = G(p) and G(q)), so each conjunct is checked up to its own horizon:
+    a conjunct without look-ahead is still checked at the last step."""
     n = _length(trace)
     parts = phi.args if isinstance(phi, And) and phi.args else (phi,)
     lasts = [n - 1 - horizon(p) for p in parts]
-    values = [min(rho(p, trace, t) for p, last in zip(parts, lasts) if t <= last) for t in range(max(lasts) + 1)]
+    return np.array([min(rho(p, trace, t) for p, last in zip(parts, lasts) if t <= last)
+                     for t in range(max(lasts) + 1)], float)
+
+
+def check_always(phi: Formula, trace: Mapping[str, np.ndarray]) -> SpecResult:
+    """G(phi) over the trace (see `series` for which steps are obligations)."""
+    values = series(phi, trace).tolist()
     if not values:
         return SpecResult(math.inf, True, 0, 0, None)
     worst = int(np.argmin(values))

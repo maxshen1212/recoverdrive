@@ -82,12 +82,41 @@ def test_r4_front_onset_slowdown():
     assert not run(None).satisfied
 
 
+def test_carla_ttc_brake_is_not_an_unnecessary_fallback():
+    # the vehicle's own TTC brake overrides the monitor; R1/R2 judge the monitor, R5 the final action
+    steps = [carla_step(0, ttc=1.5, monitor_action="continue", action="stop"),
+             carla_step(1, ttc=1.0, monitor_action="continue", action="stop"), carla_step(2)]
+    tr, _ = carla_trace(steps, {"collision": False})
+    assert check_always(spec("R2"), tr).satisfied
+    assert check_always(spec("R5"), tr).satisfied
+
+
 def test_r5_ttc_brake_and_collision():
     ok = [carla_step(0, ttc=1.5), carla_step(1, action="stop", acceptable=("continue",)), carla_step(2)]
     late = [carla_step(0, ttc=1.5), carla_step(1), carla_step(2)]
     assert check_always(spec("R5"), carla_trace(ok, {"collision": False})[0]).satisfied
     assert not check_always(spec("R5"), carla_trace(late, {"collision": False})[0]).satisfied
     assert not check_always(spec("R5"), carla_trace(ok, {"collision": True})[0]).satisfied
+
+
+def test_r1_grace0_matches_missed_fallback():
+    from recoverdrive.shield import acceptable_actions, classify_action
+    from recoverdrive.types import FaultLabel
+    recs = [record(0), record(1, "C1", FRONT, "high", 0), record(2, "C1", FRONT, "high", 0, action="stop"),
+            record(3, "L1", "lidar", "low", 1), record(4, "L2", "lidar", "high", 2, action="continue"),
+            record(5, "C3", "camera:CAM_BACK", "high", 3, action="stop"), record(6, action="slow_down"),
+            record(7, "A1", "agent", "medium", 4)]
+    missed = sum(classify_action(r["methods"]["m"]["action"]["action"],
+                                 acceptable_actions(FaultLabel(**r["label"]))) == "missed" for r in recs)
+    res = check_always(spec("R1", grace=0), trace_of(recs))
+    assert missed == 2 and res.n_violations == missed and res.n_obligations == len(recs)
+
+
+def test_series_matches_check_always():
+    from recoverdrive.stl import series
+    tr = trace_of([record(0), record(1, "C1", FRONT, "high", 0), record(2)])
+    vals = series(spec("R1", grace=0), tr)
+    assert len(vals) == 3 and vals.min() == check_always(spec("R1", grace=0), tr).robustness
 
 
 def test_evaluate_returns_each_spec():

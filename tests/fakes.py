@@ -58,8 +58,10 @@ def record(idx, fault="none", sensor="none", sev=None, ep=None, action="continue
 
 
 def carla_step(step, fault="none", sensor="none", sev=None, action="continue", acceptable=("continue",), speed=8.3,
-               ttc=None, isolated=(), state="healthy"):
-    """One logged CARLA step as scripts/run_e3.py writes it."""
+               ttc=None, isolated=(), state="healthy", monitor_action=None):
+    """One logged CARLA step as scripts/run_e3.py writes it. `action` is after the TTC brake override,
+    `monitor_action` before it (defaults to `action`)."""
     label = {"fault_id": fault, "sensor": sensor, "severity": sev, "episode_id": None if fault == "none" else 0}
-    return {"step": step, "label": label, "action": action, "acceptable": list(acceptable), "speed_mps": speed,
-            "ttc": ttc, "isolated": list(isolated), "state": state}
+    return {"step": step, "label": label, "monitor_action": monitor_action or action, "action": action,
+            "acceptable": list(acceptable), "speed_mps": speed, "ttc": ttc, "isolated": list(isolated),
+            "state": state}
