@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -146,3 +148,36 @@ def evaluate_trial(env: EvalEnv, scene: str, fault_id: str, p: dict, method: str
     trace, _ = nuscenes_trace(records, method, sensors)
     res = evaluate(trace, (spec_name,), sensors)[spec_name]
     return TrialResult(res.robustness, res.satisfied, res.n_violations, p, str(out_dir))
+
+
+ROBUSTNESS_CAP = 10.0  # a trial with no obligation scores +inf; the optimizer gets this finite value instead
+
+
+def campaign(objective: Callable[[dict], TrialResult], space: dict, sampler: str, budget: int,
+             seed: int) -> list[TrialResult]:
+    """Minimize the robustness returned by `objective` over `space` with `budget` trials. sampler: "random"
+    (uniform, today's practice of random fault injection) or "tpe" (Optuna's tree-structured Parzen estimator, a
+    guided search). space: name -> ("float", lo, hi) | ("int", lo, hi) | ("cat", choices)."""
+    import optuna
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    samplers = {"random": lambda: optuna.samplers.RandomSampler(seed=seed),
+                "tpe": lambda: optuna.samplers.TPESampler(seed=seed)}
+    study = optuna.create_study(direction="minimize", sampler=samplers[sampler]())
+    results: list[TrialResult] = []
+
+    def run(trial: optuna.Trial) -> float:
+        p = {}
+        for name, (kind, *args) in space.items():
+            if kind == "float":
+                p[name] = trial.suggest_float(name, *args)
+            elif kind == "int":
+                p[name] = trial.suggest_int(name, *args)
+            else:
+                p[name] = trial.suggest_categorical(name, args[0])
+        res = objective(p)
+        results.append(res)
+        return res.robustness if math.isfinite(res.robustness) else ROBUSTNESS_CAP
+
+    study.optimize(run, n_trials=budget)
+    return results

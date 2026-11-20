@@ -86,6 +86,25 @@ def test_evaluate_trial_scores_spec(tmp_path):
     assert [r["label"]["fault_id"] for r in recs] == ["none", "none", "C3", "C3", "none", "none"]
 
 
+def test_campaign_budget_and_seed():
+    from recoverdrive.falsify import TrialResult, campaign
+    space = {"level": ("float", 0.0, 1.0), "subtype": ("cat", ["a", "b"]), "start": ("int", 0, 9)}
+
+    def objective(p):
+        rho = p["level"] - 0.05  # violations only in a narrow corner of the space
+        return TrialResult(rho, rho >= 0, int(rho < 0), p, "")
+
+    for sampler in ("random", "tpe"):
+        a = campaign(objective, space, sampler, budget=30, seed=3)
+        b = campaign(objective, space, sampler, budget=30, seed=3)
+        assert len(a) == 30 and [r.params for r in a] == [r.params for r in b]
+        assert set(a[0].params) == set(space)
+    # guided search spends more of the budget near the violating corner than random search
+    near = {s: sum(r.robustness < 0.1 for seed in range(5) for r in campaign(objective, space, s, 40, seed))
+            for s in ("random", "tpe")}
+    assert near["tpe"] > near["random"]
+
+
 def test_cached_detector_cache_only_raises_on_miss():
     cache = DictCache()
     det = CachedDetector(cache, ["car"], allow_miss=False)
