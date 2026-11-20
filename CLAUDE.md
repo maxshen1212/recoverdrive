@@ -10,6 +10,7 @@ Phases 0–5 are done: the full detect → diagnose → recover → verify → f
 
 | Path | What it is |
 |---|---|
+| `REQUIREMENT.md` | The course's class-project requirements (formal requirements, test generation/falsification, formal reasoning, assurance strategy) and what earns a low or high grade. Check plans and the report against it. |
 | `docs/superpowers/specs/2026-11-03-recoverdrive-design.md` | Design spec, written in Traditional Chinese. Source of truth for architecture, fault list, metrics, experiments (E0–E5), and phase plan. Status: pending review. |
 | `src/recoverdrive/` | The pipeline package (layout below). |
 | `configs/` | `splits.yaml` (fixed dev/test scene split) and per-experiment configs such as `e0.yaml`. |
