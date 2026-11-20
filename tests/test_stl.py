@@ -62,6 +62,13 @@ def test_check_always_drops_obligations_past_end():
     assert res.robustness == -0.5
 
 
+def test_check_always_splits_top_level_and():
+    # G(p and F[0,1] q) == G(p) and G(F[0,1] q): p must still be checked at the last step
+    tr = {"p": np.array([1.0, 1, -1]), "q": np.array([1.0, 1, 1])}
+    res = check_always(And(Pred("p", ">=", 0), Eventually(0, 1, Pred("q", ">=", 0))), tr)
+    assert res.n_obligations == 3 and res.worst_t == 2 and not res.satisfied
+
+
 def test_empty_trace_satisfied():
     res = check_always(Pred("p", ">=", 0), {"p": np.array([])})
     assert res == SpecResult(math.inf, True, 0, 0, None)

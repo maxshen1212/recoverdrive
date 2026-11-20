@@ -119,9 +119,13 @@ class SpecResult:
 
 
 def check_always(phi: Formula, trace: Mapping[str, np.ndarray]) -> SpecResult:
-    """G(phi) over the trace: phi is evaluated at every step whose window fits in the trace."""
-    last = _length(trace) - 1 - horizon(phi)
-    values = [rho(phi, trace, t) for t in range(last + 1)]
+    """G(phi) over the trace: phi is evaluated at every step whose window fits in the trace. A top-level And is split
+    (G(p and q) = G(p) and G(q)), so each conjunct is checked up to its own horizon: a conjunct without look-ahead is
+    still checked at the last step."""
+    n = _length(trace)
+    parts = phi.args if isinstance(phi, And) and phi.args else (phi,)
+    lasts = [n - 1 - horizon(p) for p in parts]
+    values = [min(rho(p, trace, t) for p, last in zip(parts, lasts) if t <= last) for t in range(max(lasts) + 1)]
     if not values:
         return SpecResult(math.inf, True, 0, 0, None)
     worst = int(np.argmin(values))

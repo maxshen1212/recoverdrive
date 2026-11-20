@@ -46,3 +46,20 @@ def lidar_object(x, y, n_points, category="car"):
     box = Box3D(center=np.array([x, y, 0.0]), size=np.array([2.0, 4.0, 1.5]), rotation=np.array([1.0, 0, 0, 0]),
                 category=category)
     return LidarObject(box, n_points, float(np.hypot(x, y)))
+
+
+def record(idx, fault="none", sensor="none", sev=None, ep=None, action="continue", state="healthy", iso=(),
+           method="m", scene="s", seed=0, run_fault="L1"):
+    """One logged frame as run_one writes it, with a single method output."""
+    label = {"fault_id": fault, "sensor": sensor, "severity": sev, "episode_id": ep}
+    out = {"action": {"action": action}, "recovery": {"final_state": state, "isolated_sensors": list(iso)}}
+    return {"scene": scene, "seed": seed, "run_fault": run_fault, "frame_idx": idx, "label": label,
+            "methods": {method: out}}
+
+
+def carla_step(step, fault="none", sensor="none", sev=None, action="continue", acceptable=("continue",), speed=8.3,
+               ttc=None, isolated=(), state="healthy"):
+    """One logged CARLA step as scripts/run_e3.py writes it."""
+    label = {"fault_id": fault, "sensor": sensor, "severity": sev, "episode_id": None if fault == "none" else 0}
+    return {"step": step, "label": label, "action": action, "acceptable": list(acceptable), "speed_mps": speed,
+            "ttc": ttc, "isolated": list(isolated), "state": state}
