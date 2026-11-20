@@ -2,11 +2,9 @@ import itertools
 
 import numpy as np
 import pytest
+from fakes import IDENTITY, make_frame
 
 from recoverdrive.faults import FaultInjector, inject_c1, schedule_episodes
-from recoverdrive.types import CameraData, Frame, Pose
-
-IDENTITY = Pose(np.array([1.0, 0, 0, 0]), np.zeros(3))
 
 
 def episodes(schedule):
@@ -37,15 +35,6 @@ def test_schedule_is_reproducible():
     a = schedule_episodes(39, 0.5, np.random.default_rng(0))
     b = schedule_episodes(39, 0.5, np.random.default_rng(0))
     assert a == b
-
-
-def make_frame(idx=0):
-    front = CameraData(image=np.zeros((4, 4, 3), np.uint8), intrinsic=np.eye(3) * 2, extrinsic=IDENTITY,
-                       ego_pose=IDENTITY, timestamp=0, image_path="front.jpg")
-    back = CameraData(image=np.full((4, 4, 3), 255, np.uint8), intrinsic=np.eye(3) * 3, extrinsic=IDENTITY,
-                      ego_pose=IDENTITY, timestamp=0, image_path="back.jpg")
-    return Frame(source="nuscenes", scene_id="s", frame_idx=idx, timestamp=0,
-                 cameras={"CAM_FRONT": front, "CAM_BACK": back}, lidar=None, ego_pose=IDENTITY, gt_boxes=[])
 
 
 def test_inject_c1_swaps_image_keeps_calibration():

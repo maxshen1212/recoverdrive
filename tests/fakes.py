@@ -48,6 +48,47 @@ def lidar_object(x, y, n_points, category="car"):
     return LidarObject(box, n_points, float(np.hypot(x, y)))
 
 
+def make_frame(idx=0, scene="s"):
+    """A tiny two-camera frame without LiDAR and without objects."""
+    front = CameraData(image=np.zeros((4, 4, 3), np.uint8), intrinsic=np.eye(3) * 2, extrinsic=IDENTITY,
+                       ego_pose=IDENTITY, timestamp=0, image_path="front.jpg")
+    back = CameraData(image=np.full((4, 4, 3), 255, np.uint8), intrinsic=np.eye(3) * 3, extrinsic=IDENTITY,
+                      ego_pose=IDENTITY, timestamp=0, image_path="back.jpg")
+    return Frame(source="nuscenes", scene_id=scene, frame_idx=idx, timestamp=0,
+                 cameras={"CAM_FRONT": front, "CAM_BACK": back}, lidar=None, ego_pose=IDENTITY, gt_boxes=[])
+
+
+class FakeAdapter:
+    """Scenes of `n` make_frame() keyframes."""
+
+    def __init__(self, n=6):
+        self.n = n
+
+    def scene_sample_tokens(self, scene):
+        return [f"{scene}-{i}" for i in range(self.n)]
+
+    def load_frame(self, scene, idx, token):
+        return make_frame(idx, scene)
+
+
+class FakeDetector:
+    def detect(self, image, image_id=None):
+        return []
+
+
+class DictCache:
+    """In-memory stand-in for cache.KVCache."""
+
+    def __init__(self):
+        self.d = {}
+
+    def get(self, key):
+        return self.d.get(key)
+
+    def set(self, key, value):
+        self.d[key] = value
+
+
 def record(idx, fault="none", sensor="none", sev=None, ep=None, action="continue", state="healthy", iso=(),
            method="m", scene="s", seed=0, run_fault="L1"):
     """One logged frame as run_one writes it, with a single method output."""

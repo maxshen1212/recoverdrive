@@ -17,7 +17,7 @@ import numpy as np
 
 from recoverdrive.cache import digest
 from recoverdrive.checks import CheckConfig, CheckThresholds, run_checks
-from recoverdrive.faults import AgentFaultState, SensorFaultInjector, plan_faults
+from recoverdrive.faults import AgentFaultState, FaultEvent, SensorFaultInjector, plan_faults
 from recoverdrive.methods import FrameContext, build_methods
 from recoverdrive.recording import JsonlWriter, to_jsonable
 from recoverdrive.render import camera_mosaic, lidar_bev
@@ -119,14 +119,18 @@ def sensors_of(cameras: list[str]) -> list[str]:
     return [f"camera:{c}" for c in cameras] + ["lidar"]
 
 
-def run_one(spec: RunSpec, env: EvalEnv) -> dict:
-    """Process every keyframe of one scene with one fault plan; returns a short summary."""
+def run_one(spec: RunSpec, env: EvalEnv, plan: list[FaultEvent | None] | None = None,
+            frames: range | None = None) -> dict:
+    """Process every keyframe of one scene with one fault plan; returns a short summary.
+    `plan` replaces the seeded fault plan and `frames` limits the keyframes processed (falsification windows);
+    with both left as None the run is exactly the evaluation run."""
     jsonl, done = run_paths(env.out_dir, spec)
     if done.exists():
         return json.loads(done.read_text())
     cfg, cams = env.cfg, env.cameras
     tokens = env.adapter.scene_sample_tokens(spec.scene)
-    plan = plan_faults(spec.fault_id, len(tokens), run_rng(spec), cfg["faults"], cams)
+    if plan is None:
+        plan = plan_faults(spec.fault_id, len(tokens), run_rng(spec), cfg["faults"], cams)
     injector = SensorFaultInjector(plan)
     methods = build_methods(env.methods, env.client, cfg)
     check_cfg, thr = env.check_cfg, env.thresholds
@@ -135,7 +139,8 @@ def run_one(spec: RunSpec, env: EvalEnv) -> dict:
     prev_frame = prev_report = prev_mosaic = None
     errors = 0
     t_run = time.perf_counter()
-    for idx, token in enumerate(tokens):
+    for idx in frames if frames is not None else range(len(tokens)):
+        token = tokens[idx]
         try:
             lat = {}
             t0 = time.perf_counter()
@@ -188,7 +193,7 @@ def run_one(spec: RunSpec, env: EvalEnv) -> dict:
             writer.write({"scene": spec.scene, "frame_idx": idx, "run_fault": spec.fault_id, "seed": spec.seed,
                           "error": repr(exc), "traceback": traceback.format_exc()})
     writer.close()
-    summary = {"run": spec.name, "frames": len(tokens), "errors": errors,
+    summary = {"run": spec.name, "frames": len(frames) if frames is not None else len(tokens), "errors": errors,
                "wall_s": round(time.perf_counter() - t_run, 1)}
     done.write_text(json.dumps(summary))
     return summary

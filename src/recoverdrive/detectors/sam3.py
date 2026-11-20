@@ -56,12 +56,18 @@ class Sam3Detector:
         return dets
 
 
+class CacheMissError(RuntimeError):
+    """A cache-only detector (allow_miss=False) was asked about an image it has not seen."""
+
+
 class CachedDetector:
-    """Thread-safe SAM 3 front end: cache lookup by image content; the model loads on the first miss only."""
+    """Thread-safe SAM 3 front end: cache lookup by image content; the model loads on the first miss only.
+    With allow_miss=False it never loads the model: a miss raises CacheMissError (for CPU-only runs)."""
 
     def __init__(self, cache: KVCache, prompts: list[str], score_threshold: float = 0.5,
-                 model_id: str = "facebook/sam3", device: str = "cuda"):
+                 model_id: str = "facebook/sam3", device: str = "cuda", allow_miss: bool = True):
         self.cache = cache
+        self.allow_miss = allow_miss
         self.prompts, self.score_threshold, self.model_id, self.device = list(prompts), score_threshold, model_id, device
         self._base = {"model": model_id, "prompts": self.prompts, "threshold": score_threshold, "v": 2}
         self._detector: Sam3Detector | None = None
@@ -78,6 +84,8 @@ class CachedDetector:
             with self._lock:
                 hit = self.cache.get(key)
                 if hit is None:
+                    if not self.allow_miss:
+                        raise CacheMissError(f"SAM 3 cache miss for {key} (cache-only detector)")
                     if self._detector is None:
                         self._detector = Sam3Detector(self.prompts, self.score_threshold, self.model_id, self.device)
                     dets = self._detector.detect(image)
