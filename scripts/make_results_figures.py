@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 
+from recoverdrive.bootstrap import bootstrap_metrics
 from recoverdrive.metrics import aggregate_seeds, e1_table, e2_table, fmt
 from recoverdrive.runner import RunSpec, load_records
 
@@ -48,6 +49,19 @@ def read_jsonl(path: Path) -> list[dict]:
 
 
 # --- evaluation runs -------------------------------------------------------------------------------------------
+
+def merge_tags(recs: list[dict], extra: list[dict]) -> list[dict]:
+    """Add the method outputs of another run over the same frames (same split, scenes, faults and seed)."""
+    by = {(r["scene"], r["run_fault"], r["seed"], r["frame_idx"]): r for r in extra}
+    out = []
+    for r in recs:
+        o = by.get((r["scene"], r["run_fault"], r["seed"], r["frame_idx"]))
+        if o is not None:
+            assert o["label"] == r["label"], "frames differ between the merged runs"
+            r = {**r, "methods": {**r["methods"], **o["methods"]}}
+        out.append(r)
+    return out
+
 
 def load_eval(tag: str) -> tuple[list[dict], dict]:
     meta = json.loads((Path("outputs/eval") / tag / "meta.json").read_text())
@@ -255,6 +269,7 @@ def md_method_table(rows: dict[str, dict]) -> str:
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--screen", default="vlm_screen_s0", help="dev screening tag (seed 0)")
+    p.add_argument("--screen-extra", nargs="*", default=[], help="more tags over the same frames (e.g. think_trust)")
     p.add_argument("--seeds", default=None, help="tag with the 3-seed runs of the best variants, if done")
     p.add_argument("--confirm-variant", nargs="*", default=[], help="nuScenes confirm tags of a variant")
     args = p.parse_args()
@@ -285,10 +300,16 @@ def main() -> None:
 
     if (Path("outputs/eval") / args.screen / "meta.json").exists():
         recs, a = load_eval(args.screen)
-        methods = [m for m in (*REFERENCE, *VARIANTS) if any(m in r["methods"] for r in recs[:50])]
-        rows = method_rows(recs, methods, a["faults"], a["seeds"])
+        for tag in args.screen_extra:
+            recs = merge_tags(recs, load_eval(tag)[0])
+        methods = [m for m in (*REFERENCE, *VARIANTS) if any(m in r["methods"] for r in recs)]
+        rows = method_rows([r for r in recs if all(m in r["methods"] for m in methods)], methods, a["faults"],
+                           a["seeds"])
         summary["screen"] = {"tag": args.screen, "faults": a["faults"], "seeds": a["seeds"], "frames": len(recs),
                              "rows": rows, "per_fault_f1": per_fault_f1(recs, methods, a["faults"])}
+        same = [r for r in recs if all(m in r["methods"] for m in methods)]
+        boot = bootstrap_metrics(same, [m for m in methods if m != "B0"], "ours_full")
+        summary["screen"]["bootstrap"] = boot
         fig8_variants(rows, f"VLM-centric variants on the dev split (seed {a['seeds'][0]}, faults "
                             f"{' '.join(a['faults'])}; {len(recs)} frames)", "fig8_vlm_variants_screen.png")
         fig9_cost(rows, "fig9_cost_vs_f1.png")
@@ -297,6 +318,15 @@ def main() -> None:
                "| method | " + " | ".join(a["faults"]) + " |", "|---|" + "---|" * len(a["faults"])]
         pf = summary["screen"]["per_fault_f1"]
         md += [f"| {NAMES.get(m, m)} | " + " | ".join(fmt(pf[m].get(f)) for f in a["faults"]) + " |" for m in methods]
+        md += ["", "Ours-full minus each method, 95% block-bootstrap interval over fault episodes (2,000 draws):", "",
+               "| comparison | F1 | sensor acc. | false alarm | unnecessary | missed |", "|---|---|---|---|---|---|"]
+        for name in sorted({b["method"] for b in boot if b["method"].startswith("ours_full - ")}):
+            cells = []
+            for k in ("F1", "sensor_acc", "false_alarm", "unnecessary", "missed"):
+                b = next(x for x in boot if x["method"] == name and x["metric"] == k)
+                cells.append("—" if b["point"] is None else f"{b['point']:+.3f} [{b['lo']:+.3f}, {b['hi']:+.3f}]")
+            other = name.split(" - ", 1)[1]
+            md.append(f"| Ours-full − {NAMES.get(other, other)} | " + " | ".join(cells) + " |")
     if args.seeds and (Path("outputs/eval") / args.seeds / "meta.json").exists():
         recs, a = load_eval(args.seeds)
         methods = [m for m in (*REFERENCE, *VARIANTS) if any(m in r["methods"] for r in recs[:50])]
