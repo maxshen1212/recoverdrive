@@ -33,6 +33,7 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 - Folder `experiment_result/report_figures_2026-11-21` (`1BBO-rIVZXMCK_T9hkz1oK9UplcJ6PGsM`).
 - Demo video `recoverdrive_demo_c1_pedestrian.mp4` (`16TnNjXg6KOq0jPG1VVI-2WtfMhUDf2w7`, 7,020,097 bytes), made by
   `scripts/make_demo_video.py` from the recorded E3 demo runs.
+| T8a | (this commit) | Doc phase 1 applied in 4 guarded batches, 0 errors; read back: Formal Requirements (§3), Figure 2 data flow (§5), experiment table (§6 Setup), Verification and Falsification with 2 tables and Figure 8, 7. Assurance Case with Figure 12, captions renumbered (3–7, 11), 8. Conclusion; PDF export 21 pages checked | images from GitHub raw URLs at `cceadb6` (branch pushed) |
 
 ## Deferred questions
 - D3 (T3): variant prompts are written once, not tuned (one smoke check for format errors only).
@@ -47,6 +48,10 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
   most promising variant. Seeds 1–2 run only if a variant beats Ours-full on seed 0; otherwise block-bootstrap
   intervals over fault episodes on seed 0 measure the gap. If you prefer otherwise: 3 seeds for the best 2
   variants anyway (about 4–5 h of VLM time on one shared GPU).
+- D8 (T8): Doc images come from raw.githubusercontent.com at the pushed commit, because the Docs API inserts images
+  only from a public URL and the server has no Drive client for large files. The new figures are therefore in
+  `docs/media/` of the public repo (data figures were local-only before). If you prefer them private: remove them
+  from the repo after the Doc is final (the Doc keeps its own copy of each image).
 - D5 (T4–T5): the variants run on the dev split only. A test-split run of a new variant needs your OK (spec §5.4).
 
 ## Blockers
