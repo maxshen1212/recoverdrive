@@ -7,7 +7,7 @@
 - Continues `docs/superpowers/runs/2026-11-20-course-requirements.md` (Phase B tasks B3–B7).
 
 ## Status
-Current: T1–T8 done. Next: T9 merge into `main` and push (pre-authorized).
+Done (2026-11-21 06:40). All tasks checkpointed; `main` merged and pushed; vLLM servers stopped.
 
 Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs/falsify/`):
 - B3 done: `nuscenes_gpu_v1`, C2/C3 × R1/R2/R3/R6 × random/TPE, 960 trials (checks_only).
@@ -34,6 +34,7 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
   (`16TnNjXg6KOq0jPG1VVI-2WtfMhUDf2w7`, 7,020,097 bytes) and 7 figures.
 - `experiment_result/recoverdrive_results_2026-11-21_{summaries,screen_frames_part1,screen_frames_part2,trust_frames}.zip`
   (split because the connector refuses requests over 10 MB).
+| T9 | f567c6f (merge), this commit | `main` fast-forwarded to the branch (the repo's linear-history convention); in the main checkout `uv sync` builds torch 2.14.1+cu126 (CUDA available), 176 passed, ruff clean; replay check 4830/4830; pushed over HTTPS: origin/main eb34fe3..f567c6f | the worktree is kept (it holds `outputs/e3/regress_gvl2`) |
 
 ## Deferred questions
 - D3 (T3): variant prompts are written once, not tuned (one smoke check for format errors only).
