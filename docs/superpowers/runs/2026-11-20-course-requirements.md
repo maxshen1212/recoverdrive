@@ -8,7 +8,10 @@
 ## Status
 Current: Phase B moves to gvl2 (8 x RTX 6000 Ada, 6 free). Both environments are built there with
 `scripts/setup_env.sh` (CUDA 12 builds, same versions; 168 tests pass on gvl2), and the weights are in gvl2's default
-Hugging Face cache. Next: smoke test (one SAM 3 frame, one VLM request), then B3 (C2/C3 campaigns), B4-B6.
+Hugging Face cache. Smoke test passed on gvl2: `--faults C3 --specs R1 --budget 5` gave 10 trials with no error (SAM 3
+on GPU 0), and vLLM 0.32.0+cu129 on GPU 5 (port 8001) answers. Running: B3 (C2/C3 campaigns, tag `gpu_v1`) and B4
+(Ours-full confirmation of `cpu_v1`, tag `confirm_cpu_v1`). Next: B4 for `gpu_v1`, B5 (CARLA), B6.
+- pre-authorized: the user chose option 2 (CUDA 12 builds on gvl2) and was told the smoke test and Phase B follow.
 
 Tasks:
 - B1 (Task 8 code): `Scenario` for CARLA (defaults reproduce E3), per-step `gap_m` and `collision`, `falsify_carla.py`.
