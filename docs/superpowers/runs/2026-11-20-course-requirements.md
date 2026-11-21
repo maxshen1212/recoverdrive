@@ -6,8 +6,9 @@
   GPU longer than 30 minutes is part of the goal, not a blocker.
 
 ## Status
-Current: waiting for a GPU (all code for Phase B is written and tested). GPU watcher running (`wait_gpu.sh`: a card
-with >= 8 GB free and <= 50% load for 5 minutes). Next: B3 (C2/C3 campaigns) when the watcher fires, then B4-B6.
+Current: Phase B moves to gvl2 (8 x RTX 6000 Ada, 6 free). Both environments are built there with
+`scripts/setup_env.sh` (CUDA 12 builds, same versions; 168 tests pass on gvl2), and the weights are in gvl2's default
+Hugging Face cache. Next: smoke test (one SAM 3 frame, one VLM request), then B3 (C2/C3 campaigns), B4-B6.
 
 Tasks:
 - B1 (Task 8 code): `Scenario` for CARLA (defaults reproduce E3), per-step `gap_m` and `collision`, `falsify_carla.py`.
