@@ -7,7 +7,7 @@
 - Continues `docs/superpowers/runs/2026-11-20-course-requirements.md` (Phase B tasks B3–B7).
 
 ## Status
-Current: T1 - CARLA campaigns resuming. Next: implement the variants (T3) while CARLA runs.
+Current: T1 running (4 CARLA campaigns on GPU 7 since 03:20); T3 done. Next: T4 dev screening (vLLM on GPU 4).
 
 Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs/falsify/`):
 - B3 done: `nuscenes_gpu_v1`, C2/C3 × R1/R2/R3/R6 × random/TPE, 960 trials (checks_only).
@@ -20,6 +20,8 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 ## Checkpoints
 | Task | Commit | Verification | Notes |
 |---|---|---|---|
+| T0 | 77bfb9f | 170 passed, ruff clean | plan, run log, CARLA `--resume` / `--confirm` |
+| T3 | (this commit) | 175 passed, ruff clean; replay check 4830/4830 on `test_final` | `VLMVariant` (5 variants), prompts in `vlm.py`, `tests/test_variants.py`; resume keeps unreached rows |
 
 ## Deferred questions
 - D3 (T3): variant prompts are written once, not tuned (one smoke check for format errors only).

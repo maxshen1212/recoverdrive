@@ -15,18 +15,28 @@ from recoverdrive.checks import CheckOutput, flagged_sensors, rank_sensors
 from recoverdrive.faults import AGENT_FAULTS, AgentFaultState
 from recoverdrive.geometry import to_sensor_frame
 from recoverdrive.recovery import RecoveryConfig, RecoveryController, no_recovery, vote
+from recoverdrive.render import lidar_bev
 from recoverdrive.shield import shield
 from recoverdrive.types import Action, Det2D, Diagnosis, FaultLabel, Frame, Pose, RecoveryResult
 from recoverdrive.vlm import (
     CAPTION_SCHEMA,
     CAPTION_SYSTEM,
     CAPTION_USER,
+    OBSERVATION_SCHEMA,
     VLMClient,
+    camera_observe_messages,
+    decide_messages,
+    format_notes,
     image_part,
+    lidar_observe_messages,
+    observe_keys,
+    observe_messages,
+    observe_schema,
     ours_messages,
     ours_schema,
     textchain_messages,
     textchain_schema,
+    think_schema,
     to_diagnosis,
 )
 
@@ -114,6 +124,7 @@ class Ours:
         self.caller = AgentCaller(client)
         self.cfg = cfg
         self.names = names
+        self.detect_name, self.full_name = "ours_detect", "ours_full"
         self.rcfg = RecoveryConfig(**cfg.get("recovery", {}))
         self.controller = RecoveryController(self.rcfg)
         self.no_checks = cfg.get("ablation") == "no_checks"  # E5: the VLM and recovery get no check results
@@ -133,11 +144,11 @@ class Ours:
         first = self.diagnose(ctx)
         timing["vlm_first"] = first.latency_s
         outputs = {}
-        if "ours_detect" in self.names:
-            outputs["ours_detect"] = no_recovery_output(to_diagnosis(first.data), first.valid, n_calls=1,
+        if self.detect_name in self.names:
+            outputs[self.detect_name] = no_recovery_output(to_diagnosis(first.data), first.valid, n_calls=1,
                                                         latency_s=first.latency_s,
                                                         extra={"attempts": [attempt_record(first)]})
-        if "ours_full" not in self.names:
+        if self.full_name not in self.names:
             return outputs
 
         attempts, steps = [first], []
@@ -171,7 +182,7 @@ class Ours:
             # Spec §5.2: recovered if the final answer is valid and matches the fault-free answer.
             extra["agent_recovered"] = valid and same_verdict(diag, first.clean_data)
         all_calls = attempts + samples
-        outputs["ours_full"] = MethodOutput(
+        outputs[self.full_name] = MethodOutput(
             diag if valid else None, valid, alarm, pred, recovery=result, action=action,
             n_calls=len(all_calls), latency_s=sum(a.latency_s for a in all_calls), extra=extra)
         return outputs
@@ -180,16 +191,91 @@ class Ours:
         """No flag and the gate is on: the frame is treated as healthy without calling the VLM."""
         diag = Diagnosis(status="ok", sensor="none", confidence=1.0, fault_type="none", evidence="gated: no flag")
         outputs = {}
-        if "ours_detect" in self.names:
-            outputs["ours_detect"] = no_recovery_output(diag, True, extra={"gated": True})
-        if "ours_full" in self.names:
+        if self.detect_name in self.names:
+            outputs[self.detect_name] = no_recovery_output(diag, True, extra={"gated": True})
+        if self.full_name in self.names:
             result = self.controller.step(diag, True, set(), ["gated"])
             alarm, pred = full_outcome(result, ["gated"], diag)
             extra = {"gated": True, "timing": {"vlm_first": 0.0, "vlm_reask": 0.0, "vlm_samples": 0.0}}
             if ctx.agent_fault is not None:
                 extra["agent_recovered"] = True  # no call was made, so the fault had no effect
-            outputs["ours_full"] = MethodOutput(diag, True, alarm, pred, recovery=result, action=shield(result),
+            outputs[self.full_name] = MethodOutput(diag, True, alarm, pred, recovery=result, action=shield(result),
                                                 extra=extra)
+        return outputs
+
+
+class VLMVariant(Ours):
+    """VLM-centric variants (plan 2026-11-21): the VLM reasons before it answers and, in the two-stage variants,
+    first describes the raw sensor data itself. Only the diagnosis messages differ from Ours: the recovery
+    controller, the 3-sample vote and the shield are the same, so `<variant>_full` is Ours-full with another
+    diagnosis agent. `_nochecks` variants get neither the check report nor the flags.
+
+    think            one call: images + check report, reasoning first
+    think_nochecks   one call: images only, reasoning first
+    perceive         stage 1 notes on every sensor from the images (no checks); stage 2 decides from notes + report + images
+    perceive_nochecks  the same without the report
+    percam           stage 1 one call per camera (higher resolution, with its previous image) and one for the LiDAR;
+                     stage 2 decides from the notes + report + current mosaic and top view
+    Stage-1 calls are not diagnosis calls: agent faults (A1-A3) hit only the deciding call, as for Ours."""
+
+    VARIANTS: ClassVar[tuple[str, ...]] = ("think", "think_nochecks", "perceive", "perceive_nochecks", "percam")
+    MAX_TOKENS: ClassVar[dict[str, int]] = {"decide": 768, "observe": 640, "sensor": 200}
+    CAMERA_PX: ClassVar[tuple[int, int]] = (960, 540)
+
+    def __init__(self, variant: str, client: VLMClient, cfg: dict, names: tuple[str, ...]):
+        super().__init__(client, cfg, names)
+        self.variant = variant
+        self.detect_name, self.full_name = f"{variant}_detect", f"{variant}_full"
+        self.no_checks = variant.endswith("_nochecks")
+        self.notes: str | None = None
+
+    def _camera_part(self, image: np.ndarray) -> dict:
+        return image_part(np.asarray(Image.fromarray(image).resize(self.CAMERA_PX, Image.BILINEAR)))
+
+    def observe(self, ctx: FrameContext) -> tuple[str | None, list[Attempt]]:
+        """Stage 1: the VLM's own notes on every sensor (none for the one-call variants)."""
+        if self.variant.startswith("think"):
+            return None, []
+        cams = [s.split(":", 1)[1] for s in ctx.sensors if s.startswith("camera:")]
+        if self.variant.startswith("perceive"):
+            att = self.caller.call(observe_messages(ctx.mosaic, ctx.prev_mosaic, ctx.bev), observe_schema(cams),
+                                   max_tokens=self.MAX_TOKENS["observe"], diagnosis=False, name="observe")
+            return format_notes(att.data if att.valid else None, observe_keys(cams)), [att]
+        from recoverdrive.runner import points_in_ego  # runner imports this module
+
+        prev = ctx.prev_frame
+        jobs = [(c, camera_observe_messages(c, self._camera_part(ctx.frame.cameras[c].image),
+                                            self._camera_part(prev.cameras[c].image) if prev is not None else None))
+                for c in cams]
+        lidar = ctx.frame.lidar
+        n_points = 0 if lidar is None else len(lidar.points)
+        prev_bev = image_part(lidar_bev(points_in_ego(prev))) if prev is not None else None
+        jobs.append(("LIDAR_TOP", lidar_observe_messages(ctx.bev, prev_bev, self.cfg["data"].get("nominal_lidar_points"),
+                                                         n_points)))
+        with ThreadPoolExecutor(len(jobs)) as pool:
+            atts = list(pool.map(lambda j: self.caller.call(j[1], OBSERVATION_SCHEMA, max_tokens=self.MAX_TOKENS["sensor"],
+                                                            diagnosis=False, name="observe_sensor"), jobs))
+        notes = {k: (a.data["observation"] if a.valid else "(no observation)") for (k, _), a in zip(jobs, atts)}
+        return format_notes(notes, [k for k, _ in jobs]), atts
+
+    def diagnose(self, ctx: FrameContext, temperature: float = 0.0, seed: int | None = None,
+                 attempt_idx: int | None = None) -> Attempt:
+        summary = None if self.no_checks else ctx.summary
+        prev = None if self.variant == "percam" else ctx.prev_mosaic  # percam's notes already compare frames
+        msgs = decide_messages(summary, self.notes, ctx.mosaic, prev, ctx.bev)
+        return self.caller.call(msgs, think_schema(ctx.sensors), temperature=temperature, seed=seed,
+                                max_tokens=self.MAX_TOKENS["decide"], name="diagnosis", attempt_idx=attempt_idx)
+
+    def step(self, ctx: FrameContext) -> dict[str, MethodOutput]:
+        self.caller.new_frame(ctx.agent_fault)
+        self.notes, stage1 = self.observe(ctx)
+        outputs = super().step(ctx)
+        lat = sum(a.latency_s for a in stage1)
+        for out in outputs.values():
+            out.n_calls += len(stage1)
+            out.latency_s += lat
+            out.extra["stage1"] = [attempt_record(a) for a in stage1]
+            out.extra.setdefault("timing", {})["vlm_stage1"] = lat
         return outputs
 
 
@@ -296,7 +382,8 @@ def needs_vlm(methods: list[str], ablation: str) -> bool:
 def build_methods(names: list[str], client: VLMClient | None, cfg: dict) -> list:
     """One object per method family; each keeps its own per-run state."""
     methods: list = []
-    known = ("B0", "B1", "B2", "B3", "ours_detect", "ours_full", "checks_only")
+    variant_names = tuple(f"{v}_{k}" for v in VLMVariant.VARIANTS for k in ("detect", "full"))
+    known = ("B0", "B1", "B2", "B3", "ours_detect", "ours_full", "checks_only", *variant_names)
     unknown = [n for n in names if n not in known]
     if unknown:
         raise ValueError(f"unknown methods: {unknown}")
@@ -308,4 +395,8 @@ def build_methods(names: list[str], client: VLMClient | None, cfg: dict) -> list
     ours = tuple(n for n in ("ours_detect", "ours_full") if n in names)
     if ours:
         methods.append(Ours(client, cfg, ours))
+    for v in VLMVariant.VARIANTS:
+        own = tuple(n for n in (f"{v}_detect", f"{v}_full") if n in names)
+        if own:
+            methods.append(VLMVariant(v, client, cfg, own))
     return methods

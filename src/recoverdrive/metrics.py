@@ -119,6 +119,11 @@ def markdown_table(rows: list[dict], cols: list[str], pct: tuple[str, ...] = ())
 RECOVERY_METHODS = ("ours_full", "checks_only")
 
 
+def has_recovery(method: str, recovery_methods: tuple[str, ...]) -> bool:
+    """Methods with the recovery controller: the listed ones and every `<variant>_full` (plan 2026-11-21)."""
+    return method in recovery_methods or method.endswith("_full")
+
+
 def _label(r: dict):
     from recoverdrive.types import FaultLabel
 
@@ -183,7 +188,7 @@ def e2_table(records: list[dict], methods: list[str], faults: list[str],
     for m in methods:
         for f in [*faults, "all"]:
             recs = [r for r in records if f == "all" or r["run_fault"] == f]
-            rows.append({"method": m, "fault": f, **e2_counts(method_frames(recs, m), m in recovery_methods)})
+            rows.append({"method": m, "fault": f, **e2_counts(method_frames(recs, m), has_recovery(m, recovery_methods))})
     return rows
 
 
@@ -212,7 +217,7 @@ def difficulty_table(records: list[dict], methods: list[str],
             pairs = [(r, o) for r, o in method_frames(records, m)
                      if difficulty(r["label"]) is not None and (diff == "all" or difficulty(r["label"]) == diff)]
             e1 = e1_counts(pairs)
-            e2 = e2_counts(pairs, m in recovery_methods)
+            e2 = e2_counts(pairs, has_recovery(m, recovery_methods))
             rows.append({"method": m, "difficulty": diff, "n_fault": e1["n_fault"], "R": e1["R"],
                          "sensor_acc": e1["sensor_acc"], "missed_fault": e2["missed_fault"],
                          "rec_success": e2["rec_success"]})

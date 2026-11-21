@@ -459,3 +459,143 @@ def textchain_messages(variant: str, lidar: str, visual: str, sensors: list[str]
             + (" after your reasoning fields. Keep each reasoning field to at most five sentences."
                if TEXTCHAIN_REASONING[variant] else "."))
     return [{"role": "system", "content": TEXTCHAIN_SYSTEM[variant]}, {"role": "user", "content": user}]
+
+
+# --- VLM-centric variants (plan 2026-11-21-finish-and-vlm-variants) ---------------------------------------------
+# The VLM reasons before it answers and judges the raw sensor data itself. The check report, when given, is one more
+# source of evidence that can be wrong, not a rule to follow.
+
+VARIANT_SYSTEM = (
+    "You are the sensor-health monitor of an autonomous vehicle with six cameras and one roof LiDAR. You look at the "
+    "raw sensor data yourself and decide whether one sensor is faulty. At most one sensor is faulty at a time. "
+    "Respond only with the requested JSON."
+)
+
+HEALTHY_SENSORS = (
+    "A healthy camera shows a sharp, plausible view for its mounting direction (CAM_FRONT: the road ahead; CAM_BACK: "
+    "the road behind; the side cameras: the sides), different from the other cameras, and it changes from frame to "
+    "frame while the vehicle or the scene moves. Night, rain, glare, motion blur and empty roads are normal. A "
+    "healthy LiDAR top view is a dense cloud in all directions around the ego vehicle, with the nominal number of "
+    "points."
+)
+
+REPORT_CAVEAT = (
+    "The consistency report comes from deterministic code that projects LiDAR objects into each camera and compares "
+    "them with the camera's detections, and compares LiDAR point counts over time. Its numbers are exact, but its "
+    "flags can be wrong: occlusion, detector misses or too few expected objects can raise a flag on a healthy camera, "
+    "and a fault can raise no flag. Weigh the report against what you see; when the images clearly contradict a "
+    "flag, trust the images."
+)
+
+DECIDE_OUTPUT = (
+    "Return JSON with: analysis (your step-by-step reasoning, at most about 120 words), verdict (ok, uncertain, or "
+    "fault:<sensor>), fault_type, confidence in your verdict (0 to 1), and evidence (one short sentence). Answer "
+    "fault:<sensor> only when the evidence points to that sensor, ok when nothing is clearly wrong, and uncertain "
+    "only when strong evidence conflicts."
+)
+
+THINK_STEPS = (
+    "Think it through before you answer: look at every camera tile and compare it with the previous frame, look at "
+    "the LiDAR top view, then decide which sensor, if any, is faulty."
+)
+
+
+def think_schema(sensors: list[str]) -> dict:
+    """Ours' verdict fields, with free reasoning (`analysis`) first so the model thinks before it decides."""
+    props = {
+        "analysis": {"type": "string"},
+        "verdict": {"type": "string", "enum": verdict_enum(sensors)},
+        "fault_type": {"type": "string", "enum": FAULT_TYPES},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "evidence": {"type": "string"},
+    }
+    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+
+
+def _frame_images(mosaic: dict, prev_mosaic: dict | None, bev: dict) -> list[dict]:
+    content: list[dict] = [{"type": "text", "text": "Image 1: current frame, all cameras."}, mosaic]
+    if prev_mosaic is not None:
+        content += [{"type": "text", "text": "Image 2: previous frame (0.5 s earlier), same layout."}, prev_mosaic]
+    else:
+        content += [{"type": "text", "text": "(No previous frame: this is the first frame.)"}]
+    content += [{"type": "text", "text": "Image 3: LiDAR top view."}, bev]
+    return content
+
+
+def decide_messages(summary: str | None, notes: str | None, mosaic: dict, prev_mosaic: dict | None,
+                    bev: dict) -> list[dict]:
+    """The deciding call of every variant: images, optionally the VLM's own stage-1 notes and the check report."""
+    parts = [HEALTHY_SENSORS]
+    if notes is not None:
+        parts.append("Your notes from a first look at the raw sensor data:\n" + notes)
+    if summary is not None:
+        parts += [REPORT_CAVEAT, "Consistency report:\n" + summary]
+    else:
+        parts.append("There is no consistency report: decide from the sensor data alone.")
+    parts += [THINK_STEPS if notes is None else
+              "Now weigh all the evidence above against the images and decide which sensor, if any, is faulty.",
+              DECIDE_OUTPUT]
+    content = _frame_images(mosaic, prev_mosaic, bev) + [{"type": "text", "text": "\n\n".join(parts)}]
+    return [{"role": "system", "content": VARIANT_SYSTEM}, {"role": "user", "content": content}]
+
+
+OBSERVE_GUIDE = (
+    "Describe every sensor before any decision, as an expert inspector would. For each camera: what the image shows, "
+    "whether it is a plausible view for its mounting direction, the image quality (sharp, dark, washed out, blurred, "
+    "noisy, tilted, shifted), whether it repeats another camera, and whether it changed since the previous frame. "
+    "For the LiDAR: how dense the cloud is, whether points cover all directions, and any empty wedge or shift. Write "
+    "one or two sentences per sensor. Do not decide yet."
+)
+
+
+def observe_keys(cameras: list[str]) -> list[str]:
+    return [*cameras, "LIDAR_TOP"]
+
+
+def observe_schema(cameras: list[str]) -> dict:
+    """Stage 1: one free-text observation per sensor (flat, so the shared JSON validator applies)."""
+    props = {k: {"type": "string"} for k in observe_keys(cameras)}
+    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+
+
+def observe_messages(mosaic: dict, prev_mosaic: dict | None, bev: dict) -> list[dict]:
+    content = _frame_images(mosaic, prev_mosaic, bev) + [
+        {"type": "text", "text": HEALTHY_SENSORS + "\n\n" + OBSERVE_GUIDE}]
+    return [{"role": "system", "content": VARIANT_SYSTEM}, {"role": "user", "content": content}]
+
+
+def format_notes(data: dict | None, keys: list[str]) -> str:
+    if data is None:
+        return "(no notes: the first look failed)"
+    return "\n".join(f"- {k}: {str(data.get(k, '')).strip() or '(none)'}" for k in keys)
+
+
+OBSERVATION_SCHEMA = {"type": "object", "properties": {"observation": {"type": "string"}},
+                      "required": ["observation"], "additionalProperties": False}
+
+
+def camera_observe_messages(camera: str, current: dict, previous: dict | None) -> list[dict]:
+    """`percam` stage 1: one camera at higher resolution, with its previous image."""
+    view = CAMERA_VIEWS.get(camera, "")
+    content: list[dict] = [{"type": "text", "text": f"Image 1: {camera} ({view}), current frame."}, current]
+    if previous is not None:
+        content += [{"type": "text", "text": f"Image 2: {camera}, previous frame (0.5 s earlier)."}, previous]
+    content.append({"type": "text", "text": (
+        f"Describe this camera as an expert inspector would: what it shows, whether it is a plausible view {view}, "
+        "the image quality (sharp, dark, washed out, blurred, noisy, tilted, shifted), and whether it changed since "
+        "the previous frame. Night, rain, glare and motion blur are normal. Two or three sentences; do not decide "
+        "yet. Return JSON with: observation.")})
+    return [{"role": "system", "content": VARIANT_SYSTEM}, {"role": "user", "content": content}]
+
+
+def lidar_observe_messages(bev: dict, prev_bev: dict | None, nominal_points: int | None, n_points: int) -> list[dict]:
+    """`percam` stage 1 for the LiDAR: current and previous top view and the raw point count."""
+    content: list[dict] = [{"type": "text", "text": "Image 1: LiDAR top view, current sweep."}, bev]
+    if prev_bev is not None:
+        content += [{"type": "text", "text": "Image 2: LiDAR top view, previous sweep (0.5 s earlier)."}, prev_bev]
+    nominal = f" (nominal for this sensor about {nominal_points})" if nominal_points else ""
+    content.append({"type": "text", "text": (
+        f"This sweep has {n_points} points{nominal}. Describe the LiDAR as an expert inspector would: how dense the "
+        "cloud is, whether points cover all directions, any empty wedge, shift or sudden change since the previous "
+        "sweep. Two or three sentences; do not decide yet. Return JSON with: observation.")})
+    return [{"role": "system", "content": VARIANT_SYSTEM}, {"role": "user", "content": content}]

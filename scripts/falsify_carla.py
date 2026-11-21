@@ -94,9 +94,8 @@ def main() -> None:
     out = args.out_root / f"carla_{args.tag}"
     out.mkdir(parents=True, exist_ok=True)
     old_rows = read_rows(out / "trials.jsonl") if args.resume else []
-    old = {(r["hazard"], r["sampler"], r["trial"]): r["params"] for r in old_rows}
     (out / "meta.json").write_text(json.dumps({"args": {k: str(v) for k, v in vars(args).items()}, "config": cfg,
-                                               "git": git_state(REPO), "resumed_trials": len(old)}, indent=2))
+                                               "git": git_state(REPO), "resumed_trials": len(old_rows)}, indent=2))
     cache = KVCache(cfg["cache"])
     s = cfg["sam3"]
     detector = CachedDetector(cache, s["prompts"], s["score_threshold"], s["model_id"])
@@ -123,13 +122,17 @@ def main() -> None:
         if args.confirm:
             run_confirm(args, out, e3, client, world, cfg, run_args, routes, detector, vlm)
         else:
-            run_campaigns(args, out, old, e3, client, world, cfg, run_args, routes, detector, vlm)
+            run_campaigns(args, out, old_rows, e3, client, world, cfg, run_args, routes, detector, vlm)
     finally:
         settings.synchronous_mode, settings.fixed_delta_seconds = False, None
         world.apply_settings(settings)
 
 
-def run_campaigns(args, out, old, e3, client, world, cfg, run_args, routes, detector, vlm) -> None:
+def run_campaigns(args, out, old_rows, e3, client, world, cfg, run_args, routes, detector, vlm) -> None:
+    def key(r: dict) -> tuple:
+        return r["hazard"], r["sampler"], r["trial"]
+
+    old = {key(r): r["params"] for r in old_rows}
     rows: list[dict] = []
     for hazard in args.hazards:
         idx = [i for i in range(len(routes)) if HAZARDS[i % 2] == hazard]
@@ -155,7 +158,9 @@ def run_campaigns(args, out, old, e3, client, world, cfg, run_args, routes, dete
                 fields, r5 = score(tdir, res)
                 rows.append({"hazard": hazard, "sampler": sampler, "trial": i, "params": raw, "scenario": vars(sc),
                              **fields, "run_dir": str(tdir)})
-                (out / "trials.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+                done = {key(r) for r in rows}  # keep earlier rows not reached yet, in case this run stops too
+                rest = [r for r in old_rows if key(r) not in done]
+                (out / "trials.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows + rest))
                 return TrialResult(r5.robustness, r5.satisfied, r5.n_violations, raw, str(tdir))
 
             results = campaign(objective, space, sampler, args.budget, args.seed)
