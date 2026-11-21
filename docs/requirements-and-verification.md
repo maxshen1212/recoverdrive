@@ -5,9 +5,11 @@ test generation by falsification, formal reasoning, and an assurance strategy. E
 file:
 - `report_figures/requirements.md` (`scripts/check_requirements.py`)
 - `report_figures/formal.md` (`scripts/verify_logic.py`)
-- `outputs/falsify/*/summary.md` (`scripts/falsify_nuscenes.py`)
+- `outputs/falsify/*/summary.md` (`scripts/falsify_nuscenes.py`, `scripts/falsify_carla.py`)
+- `report_figures/results_2026-11-21.{md,json}` (`scripts/make_results_figures.py`)
 
-Items marked **[Phase B]** wait for free GPUs.
+Phase B (GPU campaigns, replays with the VLM, CARLA) finished on 2026-11-21; the run log is
+`docs/superpowers/runs/2026-11-21-finish-and-vlm-variants.md`.
 
 ## Requirements (after "Assumptions and Constraints")
 
@@ -135,34 +137,46 @@ boundaries.
 - The faults C1, C4, L1, L2 and L4 reuse only original images, so their trials run on the CPU from cached SAM 3
   detections.
 
-**Results (C1, C4, L1, L2, L4; 2,400 trials):**
+**Results (all seven sensor faults; 3,360 trials):**
 
 | | Random search | Guided search (TPE) |
 |---|---|---|
-| Trials that violate a requirement | 157 / 1,200 (13%) | 448 / 1,200 (37%) |
-| (fault, requirement) pairs with more violations found | — | 16 of 20 (the other 4 tie) |
-| Recovery (R3) violations found | 0 | 34, across all five faults |
+| C1, C4, L1, L2, L4 (CPU, 2,400 trials) | 157 / 1,200 (13%) | 448 / 1,200 (37%) |
+| C2, C3 (SAM 3 on a GPU, 960 trials) | 43 / 480 (9%) | 166 / 480 (35%) |
+| **All** | **200 / 1,680 (12%)** | **614 / 1,680 (37%)** |
+| (fault, requirement) pairs with more violations found | 2 of 28 | 22 of 28 (4 tie) |
 
 At equal budget, the guided search finds about three times as many violating fault settings as random injection. It
-also finds a class that random injection never hit: slow recovery after an episode ends (R3). No search found an R1
-violation for LiDAR dropout or LiDAR failure (L1, L4); those faults are always caught.
+also finds a class that random injection never hit on C1, C4, L1, L2 and L4: slow recovery after an episode ends (R3).
+Random search found more only where violations are rare and scattered: C3 with R1 (7 against 0) and with R6 (1
+against 0), where the model TPE builds from its first trials leads it away from the few weak-blur cases. No search
+found an R1 violation for LiDAR dropout or LiDAR failure (L1, L4); those faults are always caught.
 
-**Triage.** We classified each of the 605 violating trials from its logged frame. Every one traces to one of three
+**Triage.** We classified each of the 814 violating trials from its logged frame. Every one traces to one of three
 causes, and none to the recovery logic or the shield (both proven above):
-- **The detection limit or the known false-alarm rate of the checks:**
-  - false alarms on clean frames, 219 trials;
-  - a check that misses one frame of an active fault, 118;
-  - faults too weak for the checks, 86.
-- **A violated assumption A3,** a camera with fewer than two reference objects: 89 trials.
-- **Design choices or label boundaries:**
-  - one step of recovery lag, 51 trials;
-  - temporal checks that compare with the still-faulty previous frame, 32;
-  - levels at the low/medium label boundary, 7.
+- **The detection limit or the known false-alarm rate of the checks:** false alarms on clean frames (307 trials),
+  a check that misses one frame of an active fault (141), faults too weak for the checks (116), other sensors
+  flagged during or after the episode (29).
+- **A violated assumption A3,** a camera with fewer than two reference objects: 105 trials.
+- **Design choices or label boundaries:** one step of recovery lag (65), temporal checks that compare with the
+  still-faulty previous frame (36), levels at the low/medium label boundary (15).
 
 No repair was needed. The residual risk is in the monitor's evidence, not in its logic.
 
-**[Phase B]** C2 and C3 (new images, SAM 3 on a GPU); replay of the worst cases with Ours-full (VLM); closed-loop
-falsification in CARLA (R4, R5) over pedestrian timing and speed, lead-vehicle braking, fault type and fault window.
+**Replay with the VLM.** The 10 worst violating trials of each (fault, requirement) pair, replayed with Ours-full:
+212 of the 214 still violate the requirement (145 of 147 for C1, C4, L1, L2, L4; 67 of 67 for C2, C3). The frozen
+prompt tells the VLM that the checks are reliable, so it follows them, including their false alarms and misses.
+
+**Closed loop in CARLA (R4, R5).** Four campaigns of 40 runs (pedestrian crossing and lead-car braking, random and
+TPE) search the route, the trigger offset, the walker speed or braking time, the front fault (C1, black camera,
+rotated camera, LiDAR dropout ahead), its level and its window. Results: 29 R4 violations (no slow-down within 3 s of
+a front fault; lead car: random 5, TPE 17; pedestrian: random 3, TPE 4) and one R5 violation with a collision
+(pedestrian, random search). Every violation is a rotated front camera (C2, 5–12°) that the checks did not detect:
+the checks isolate the camera in all 31 C1 runs and all 18 black-camera runs, but in only 7 of 74 rotation runs. In
+the collision, a 7.1° rotation starting 4 m before the trigger raised no flag; the TTC brake, which uses
+camera-confirmed objects while the camera is not isolated, fired at TTC 0.35 s and the car stopped 0.1 m too late.
+Replayed with Ours-full, the same scenario also collides. Misalignment is the weak spot in both data sources (test F1
+0.47 for C2), and the closed-loop search found a collision that E3, with C1 only, could not show.
 
 ## Assurance case (before the Conclusion)
 
