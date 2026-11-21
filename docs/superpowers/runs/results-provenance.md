@@ -73,7 +73,7 @@ SAM 3 and VLM answers are reused. "dirty" below means only run-log files were un
 | VLM-centric variants, screening (dev, seed 0, 7 faults) | `eval/vlm_screen_s0/` | `dfd2846` (dirty) | Recorded. Restarted at 04:19 with a second VLM server; finished runs and the cache were reused. |
 | `think_trust` ablation (same frames) | `eval/vlm_screen_s0_trust/` | `ad13504` | Recorded. |
 | Replays with variants | `falsify/nuscenes_confirm_{cpu,gpu}_v1_{think_trust_full,think_nochecks_full}/` | `df05870` (C1, C4, L1, L2, L4), `648712a` (C2, C3); dirty: docs only | Recorded. |
-| Figures and tables of this run | `report_figures/results_2026-11-21.{md,json}`, `fig6`–`fig10`; `docs/media/{falsification,vlm_variants,vlm_variants_per_fault,dataflow,assurance_case}.png` (tracked) | branch head | `scripts/make_results_figures.py`, `make_dataflow_figure.py`, `make_assurance_figure.py` |
+| Figures and tables of this run | `report_figures/results_2026-11-21.{md,json}`, `fig6`–`fig10`; `docs/media/{falsification,vlm_variants,vlm_variants_per_fault,vlm_replays,dataflow,assurance_case}.png` (tracked) | branch head | `scripts/make_results_figures.py`, `make_dataflow_figure.py`, `make_assurance_figure.py` |
 | Demo video | Drive `experiment_result/report_figures_2026-11-21/recoverdrive_demo_c1_pedestrian.mp4` | `c8361ce` | `scripts/make_demo_video.py` from `e3/demo/` |
 
 Later commits (`528b367..14d3024`) changed only documentation, comments, the model download script, the CARLA
