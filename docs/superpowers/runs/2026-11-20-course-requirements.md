@@ -33,3 +33,11 @@ Tasks:
 
 ## Blockers
 (none)
+
+## Waiting log
+- 2026-11-20 16:44–22:45: watcher 1 timed out after 6 h; no card ever had >= 8 GB free with <= 50% load (all 4 at
+  100%, 13 processes of other users). Watcher 2 started 22:45 (until about 04:45).
+- 2026-11-21 00:10: watcher 2 stopped by the user. The project moves to the gvl2 server (8 x RTX 6000 Ada, mostly
+  free): copied with rsync to `maxshen@10.137.32.108:/data/maxshen/recoverdrive` without the `.venv` folders. Phase B
+  continues there. Before running: `uv sync` (main, `--project serving`, and in this worktree) and the model weights
+  (Qwen3-VL-8B, SAM 3) in the Hugging Face cache.
