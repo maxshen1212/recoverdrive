@@ -76,6 +76,7 @@ def main() -> None:
     p.add_argument("--resume", action="store_true", help="continue a stopped campaign with the same tag")
     p.add_argument("--confirm", type=int, default=0, help="replay the K lowest-R5 scenarios per hazard of --from-tags")
     p.add_argument("--from-tags", nargs="*", default=[])
+    p.add_argument("--by", choices=["R5", "R4"], default="R5", help="requirement that ranks the replayed scenarios")
     args = p.parse_args()
     if args.confirm and not args.from_tags:
         raise SystemExit("--confirm needs --from-tags")
@@ -183,7 +184,7 @@ def run_campaigns(args, out, old_rows, e3, client, world, cfg, run_args, routes,
 
 def run_confirm(args, out, e3, client, world, cfg, run_args, routes, detector, vlm) -> None:
     src = [r | {"from_tag": t} for t in args.from_tags for r in read_rows(args.out_root / f"carla_{t}" / "trials.jsonl")]
-    picked = select_worst_carla(src, args.confirm)
+    picked = select_worst_carla(src, args.confirm, args.by)
     print(f"replaying {len(picked)} scenarios of {len(src)} trials with {args.method}", flush=True)
     rows = []
     for r in picked:
@@ -198,14 +199,14 @@ def run_confirm(args, out, e3, client, world, cfg, run_args, routes, detector, v
                      args.method: fields, "run_dir": str(tdir)})
         (out / "confirm.jsonl").write_text("".join(json.dumps(x) + "\n" for x in rows))
     md = [f"# CARLA confirmation ({args.tag})", "",
-          (f"The {args.confirm} lowest-R5 scenarios per hazard of {', '.join(args.from_tags)}, replayed with "
+          (f"The {args.confirm} lowest-{args.by} scenarios per hazard of {', '.join(args.from_tags)}, replayed with "
            f"{args.method}."), "",
-          f"| hazard | source | R5 checks_only | R5 {args.method} | collision checks_only | collision {args.method} |",
-          "|---|---|---|---|---|---|"]
+          (f"| hazard | source | R4 checks_only | R4 {args.method} | R5 checks_only | R5 {args.method} | "
+          f"collision checks_only | collision {args.method} |"), "|---|---|---|---|---|---|---|---|"]
     for x in rows:
         c, m = x["checks_only"], x[args.method]
-        md.append(f"| {x['hazard']} | {x['from_tag']} #{x['trial']} | {c['R5']} | {m['R5']} | {c['collision']} | "
-                  f"{m['collision']} |")
+        md.append(f"| {x['hazard']} | {x['from_tag']} #{x['trial']} | {c['R4']} | {m['R4']} | {c['R5']} | {m['R5']} | "
+                  f"{c['collision']} | {m['collision']} |")
     md += ["", f"git: {git_state(REPO)}"]
     (out / "summary.md").write_text("\n".join(md) + "\n")
     print("\n".join(md))

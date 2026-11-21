@@ -153,3 +153,10 @@ def test_cached_detector_cache_only_raises_on_miss():
     with pytest.raises(CacheMissError):
         det.detect(np.ones((4, 4, 3), np.uint8))
     assert det._detector is None
+
+
+def test_select_worst_carla_by_r4():
+    from recoverdrive.falsify import select_worst_carla
+
+    rows = [{"hazard": "lead_brake", "R5": 0.5, "R4": r4, "params": {"seed": i}} for i, r4 in enumerate((0.5, -0.5, None))]
+    assert [r["R4"] for r in select_worst_carla(rows, 2, "R4")] == [-0.5, 0.5]

@@ -168,17 +168,18 @@ def select_worst(rows: list[dict], k: int) -> list[dict]:
     return out
 
 
-def select_worst_carla(rows: list[dict], k: int) -> list[dict]:
-    """Per hazard: the k trials with the lowest R5 robustness (violations first, since they score below 0), one per
-    parameter set. Trials with no R5 obligation (robustness None) are skipped. These are replayed with Ours-full."""
+def select_worst_carla(rows: list[dict], k: int, spec: str = "R5") -> list[dict]:
+    """Per hazard: the k trials with the lowest robustness of `spec` (R5 or R4; violations first, since they score
+    below 0), one per parameter set. Trials with no obligation (robustness None) are skipped. These are replayed
+    with another method."""
     by: dict[str, list[dict]] = {}
     for r in rows:
-        if r.get("R5") is not None:
+        if r.get(spec) is not None:
             by.setdefault(r["hazard"], []).append(r)
     out = []
     for hazard in sorted(by):
         seen = set()
-        for r in sorted(by[hazard], key=lambda r: r["R5"]):
+        for r in sorted(by[hazard], key=lambda r: r[spec]):
             sig = json.dumps(r["params"], sort_keys=True)
             if sig not in seen and len(seen) < k:
                 seen.add(sig)
