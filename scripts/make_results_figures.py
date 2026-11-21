@@ -265,17 +265,60 @@ def fig9_cost(rows: dict[str, dict], name: str) -> None:
     xs = [rows[m]["calls_per_frame"] for m in methods]
     ys = [rows[m]["F1"] for m in methods]
     ax.scatter(xs, ys, s=64, color=SLOTS[0], edgecolor=SURFACE, linewidth=2, zorder=3)
-    for x, yv, m in zip(xs, ys, methods):
-        ax.annotate(NAMES.get(m, m), (x, yv), xytext=(7, 4), textcoords="offset points", fontsize=8.5, color=INK)
     ax.set_xlabel("VLM calls per frame (mean, incl. re-ask and vote)")
     ax.set_ylabel("F1 (all frames of the run faults)")
     ax.set_xlim(-0.3, max(xs) * 1.35 + 0.5)
+    ax.set_ylim(min(ys) - 0.05, max(ys) + 0.08)
     ax.grid(color=GRID, lw=0.8)
     ax.set_axisbelow(True)
     ax.set_title("Detection quality vs. VLM cost (dev split)", fontsize=10.5, loc="left")
     fig.tight_layout()
+    place_labels(fig, ax, xs, ys, [NAMES.get(m, m) for m in methods])
     fig.savefig(OUT / name, dpi=160)
     plt.close(fig)
+
+
+CANDIDATES = [(8, 0, "left"), (-8, 0, "right"), (8, 10, "left"), (8, -10, "left"), (-8, 10, "right"),
+              (-8, -10, "right"), (8, 20, "left"), (8, -20, "left"), (-8, 20, "right"), (-8, -20, "right"),
+              (8, 30, "left"), (8, -30, "left")]
+
+
+def place_labels(fig, ax, xs, ys, texts, fontsize=8.5) -> None:
+    """Greedy label placement: for each point, the first candidate offset whose box overlaps no placed label, no
+    point and stays inside the axes; the least-overlapping candidate when none is free. Leader line when moved."""
+    renderer = fig.canvas.get_renderer()
+    fig.canvas.draw()
+    pts = ax.transData.transform(np.column_stack([xs, ys]))
+    r = 6.0
+    point_boxes = [(px - r, py - r, px + r, py + r) for px, py in pts]
+    inside = ax.get_window_extent(renderer)
+    placed: list[tuple[float, float, float, float]] = []
+
+    def overlap(b, c) -> float:
+        w = min(b[2], c[2]) - max(b[0], c[0])
+        h = min(b[3], c[3]) - max(b[1], c[1])
+        return w * h if w > 0 and h > 0 else 0.0
+
+    for i in sorted(range(len(texts)), key=lambda i: -ys[i]):
+        best = None
+        for dx, dy, ha in CANDIDATES:
+            ann = ax.annotate(texts[i], (xs[i], ys[i]), xytext=(dx, dy), textcoords="offset points", ha=ha,
+                              va="center", fontsize=fontsize, color=INK)
+            bb = ann.get_window_extent(renderer)
+            box = (bb.x0 - 2, bb.y0 - 1, bb.x1 + 2, bb.y1 + 1)
+            out = (max(0, inside.x0 - box[0]) + max(0, box[2] - inside.x1) + max(0, inside.y0 - box[1]) +
+                   max(0, box[3] - inside.y1)) * 50
+            cost = out + sum(overlap(box, c) for c in placed) + sum(overlap(box, c) for c in point_boxes)
+            ann.remove()
+            if best is None or cost < best[0]:
+                best = (cost, dx, dy, ha, box)
+            if cost == 0:
+                break
+        _, dx, dy, ha, box = best
+        arrow = {"arrowstyle": "-", "color": INK2, "lw": 0.6, "shrinkA": 0, "shrinkB": 5} if abs(dy) > 5 else None
+        ax.annotate(texts[i], (xs[i], ys[i]), xytext=(dx, dy), textcoords="offset points", ha=ha, va="center",
+                    fontsize=fontsize, color=INK, arrowprops=arrow)
+        placed.append(box)
 
 
 BLUES = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
@@ -293,9 +336,8 @@ def fig10_per_fault(pf: dict[str, dict[str, float]], faults: list[str], name: st
     for i in range(len(methods)):
         for j in range(len(faults)):
             v = vals[i, j]
-            if not np.isnan(v):
-                ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=9,
-                        color="#ffffff" if v >= 0.55 else INK)
+            ax.text(j, i, "—" if np.isnan(v) else f"{v:.2f}", ha="center", va="center", fontsize=9,
+                    color="#ffffff" if not np.isnan(v) and v >= 0.55 else INK)
     ax.set_xticks(range(len(faults)), faults)
     ax.set_yticks(range(len(methods)), [NAMES.get(m, m) for m in methods])
     ax.tick_params(length=0)
@@ -329,6 +371,8 @@ def main() -> None:
     p.add_argument("--screen-extra", nargs="*", default=[], help="more tags over the same frames (e.g. think_trust)")
     p.add_argument("--seeds", nargs="*", default=[], help="tags whose union holds 3 seeds of the best variants")
     p.add_argument("--confirm-variant", nargs="*", default=[], help="nuScenes confirm tags of a variant")
+    p.add_argument("--agent", default=None, help="dev tag with the agent faults A1-A3 (seed 0)")
+    p.add_argument("--carla-confirm", nargs="*", default=[], help="CARLA confirm tags (outputs/falsify/carla_<tag>)")
     args = p.parse_args()
     OUT.mkdir(exist_ok=True)
     summary: dict = {}
@@ -398,6 +442,58 @@ def main() -> None:
         fig8_variants(rows, f"Dev split, mean ± std over seeds {seeds} (faults {' '.join(faults)}; {len(recs)} frames)",
                       "fig8_vlm_variants_seeds.png")
         md += ["", f"## Seeds {seeds} ({', '.join(args.seeds)}: {len(recs)} frames)", "", md_method_table(rows)]
+    if args.agent:
+        recs, a = load_eval(args.agent)
+        methods = [m for m in ("ours_full", *VARIANTS) if any(m in r["methods"] for r in recs)]
+        recs = [r for r in recs if all(m in r["methods"] for m in methods)]
+        e2 = e2_table(recs, methods, a["faults"])
+        rows = method_rows(recs, methods, a["faults"], a["seeds"])
+        summary["agent"] = {"tag": args.agent, "faults": a["faults"], "frames": len(recs), "rows": rows,
+                            "rec_success": {m: {r["fault"]: r["rec_success"] for r in e2 if r["method"] == m}
+                                            for m in methods}}
+        md += ["", f"## Agent faults ({args.agent}: {len(recs)} frames, seed {a['seeds'][0]})", "",
+               "| method | " + " | ".join(f"rec. success {f}" for f in a["faults"]) + " | rec. success all | "
+               "unnecessary | missed | VLM calls/frame |", "|---|" + "---|" * (len(a["faults"]) + 4)]
+        for m in methods:
+            rs = summary["agent"]["rec_success"][m]
+            md.append(f"| {NAMES.get(m, m)} | " + " | ".join(fmt(rs.get(f)) for f in a["faults"]) +
+                      f" | {fmt(rs.get('all'))} | {fmt(rows[m]['unnecessary'])} | {fmt(rows[m]['missed'])} | "
+                      f"{fmt(rows[m]['calls_per_frame'])} |")
+    if args.carla_confirm:
+        crow = [x | {"tag": t} for t in args.carla_confirm
+                for x in read_jsonl(Path("outputs/falsify") / f"carla_{t}" / "confirm.jsonl")]
+        summary["carla_confirm"] = crow
+        md += ["", "## CARLA scenarios replayed with another method", "",
+               ("| tag | hazard | source | fault | R4 checks-only | R4 method | R5 checks-only | R5 method | "
+               "collision checks-only | collision method | front camera isolated in fault steps, checks-only / "
+               "method | clean steps with a sensor isolated, checks-only / method |"),
+               "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+        src = {(t, r["trial"]): r for t in {x["from_tag"] for x in crow}
+               for r in read_jsonl(Path("outputs/falsify") / f"carla_{t}" / "trials.jsonl")}
+
+        def isolation_counts(run_dir: str) -> tuple[int, int, int, int]:
+            steps = [s for f in sorted(Path(run_dir).glob("*.jsonl")) for s in read_jsonl(f)]
+            fault = [s for s in steps if s["label"]["fault_id"] != "none"]
+            clean = [s for s in steps if s["label"]["fault_id"] == "none"]
+            return (sum("camera:CAM_FRONT" in (s.get("isolated") or []) for s in fault), len(fault),
+                    sum(bool(s.get("isolated")) for s in clean), len(clean))
+
+        for x in crow:
+            m = next(k for k in x if k.endswith("_full") or k == "ours_full")
+            c, v = x["checks_only"], x[m]
+            row = src.get((x["from_tag"], x["trial"]), {})
+            sc = row.get("scenario", {})
+            x["method"], x["fault"], x["fault_level"] = m, sc.get("fault"), sc.get("fault_level")
+            x["front_isolated_in_fault"], x["fault_steps"], x["clean_steps_degraded"], x["clean_steps"] = \
+                isolation_counts(x["run_dir"])
+            x["checks_only_counts"] = list(isolation_counts(row["run_dir"])) if row.get("run_dir") else None
+            fault = f"{sc.get('fault', '')} {sc['fault_level']:.1f}" if sc.get("fault_level") is not None else \
+                sc.get("fault", "")
+            cc = x["checks_only_counts"] or ["?"] * 4
+            md.append(f"| {x['tag']} | {x['hazard']} | {x['from_tag']} #{x['trial']} | {fault} | "
+                      f"{fmt(c['R4'])} | {fmt(v['R4'])} | {fmt(c['R5'])} | {fmt(v['R5'])} | {c['collision']} | "
+                      f"{v['collision']} | {cc[0]}/{cc[1]} / {x['front_isolated_in_fault']}/{x['fault_steps']} | "
+                      f"{cc[2]}/{cc[3]} / {x['clean_steps_degraded']}/{x['clean_steps']} |")
     (OUT / "results_2026-11-21.md").write_text("\n".join(md) + "\n")
     (OUT / "results_2026-11-21.json").write_text(json.dumps(summary, indent=1, default=float))
     print("\n".join(md))

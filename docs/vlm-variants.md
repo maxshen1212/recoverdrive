@@ -32,6 +32,17 @@ Every variant has a `_detect` output (first answer, no recovery) and a `_full` o
 | `perceive_nochecks` | 2 | its own notes + images | two stages, VLM only |
 | `think_trust` (ablation, added under D7) | 1 | images + check report; the frozen prompt ("the checks are reliable") | Ours plus a reasoning field written before the verdict |
 | `percam` | 8 | per-sensor notes + check report + current mosaic and top view | stage 1 looks at each camera alone at 960×540 with its previous image (6 calls) and at the LiDAR top views with the point count (1 call); stage 2 decides |
+| `perceive_trust` (round 2) | 2 | its own notes + check report + images; the frozen prompt ("the checks are reliable") | the three-step flow (VLM features first, then the pipeline's checks, then one final VLM call) with the frozen guidance kept, plus a reasoning field |
+| `imgflag` (round 2) | 2 | images + check report extended by the VLM image flag; the frozen prompt | stage 1 asks only about image quality (ok or abnormal per camera); an abnormal camera becomes one more flag `camera:<C>:vlm_image` in the report and the recovery; the frozen Ours call decides |
+| `imgflag_checks` (round 2) | 1 | — (no deciding VLM call) | the same VLM image flag added to the checks-only monitor: the VLM is used only as a feature extractor |
+
+Round 2 was added after the first results (plan section "Round 2"): `perceive_trust` tests the three-step flow (VLM features, then the checks, then one final call)
+without the "checks can be wrong" instruction that hurt round 1, and the two `imgflag` variants test the direction round
+1 pointed to (the VLM judges image quality only, as one more flag rather than a veto). The image check sees the current
+and the previous camera mosaic and answers, per camera, whether the image is black, washed out, blurred, noisy, tilted
+or rotated, shifted, or frozen; night, rain, glare, motion blur and empty roads count as normal. Its call is a feature
+call, not a diagnosis call, so the agent faults A1–A3 do not reach it (as for the stage-1 calls of round 1); for
+`imgflag_checks`, which has no other VLM call, the agent faults therefore have no effect.
 
 Output of the deciding call (JSON schema): `analysis` (free reasoning, written first), `verdict` (ok, uncertain or
 fault:<sensor>), `fault_type`, `confidence`, `evidence`. Stage-1 calls are not diagnosis calls: the agent faults
@@ -111,6 +122,23 @@ quality (C2, C3), where it sees more than the geometry, with its answer as one m
 
 Not done (deferred question D7): seeds 1–2 (no variant beats Ours-full on seed 0), the agent faults A1–A3 for the
 variants, and the test split (a new variant needs the user's approval under spec §5.4).
+
+### Agent faults (round 2)
+
+Dev split, seed 0, faults A1 (corrupted output), A2 (wrong answer: ok and fault swapped) and A3 (timeout), 729 frames,
+0 frame errors (`outputs/eval/vlm_agent_s0`). Every sensor is healthy on these frames, so any fallback is unnecessary.
+Recovery success = the final answer is valid and matches the model's fault-free answer (spec §5.2).
+
+| Method | Recovery A1 | Recovery A2 | Recovery A3 | Recovery, all | Unnecessary fallback | VLM calls per frame |
+|---|---|---|---|---|---|---|
+| Ours-full (frozen) | 0.667 | 0.758 | 0.558 | 0.661 | 0.056 | 2.21 |
+| Think, trusting the checks | 0.633 | 0.692 | 0.542 | 0.622 | 0.089 | 2.31 |
+| VLM image flag → Ours | 0.667 | 0.758 | 0.558 | 0.661 | 0.154 | 3.52 |
+
+The variants keep the re-ask recovery: the image-flag variant recovers exactly as often as Ours-full, because its
+deciding call is the frozen one, and `think_trust` slightly less often. On these healthy-sensor frames the image flag
+nearly triples the unnecessary fallbacks (0.154 against 0.056). `imgflag_checks` is not in the table: its only VLM call
+is the image check, which the agent faults do not reach (deferred question D10).
 
 ### Replays of the falsification counterexamples
 

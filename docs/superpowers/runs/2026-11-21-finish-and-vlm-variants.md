@@ -7,9 +7,8 @@
 - Continues `docs/superpowers/runs/2026-11-20-course-requirements.md` (Phase B tasks B3–B7).
 
 ## Status
-Current: round 2 after the stop-hook review (more combinations; close D6/D7). T10 done: `perceive_trust`,
-`imgflag`, `imgflag_checks`. Next: T11 screen them on the same frames (3 vLLM servers: GPUs 7, 3, 4), then T12 seeds 1–2
-and T13 agent faults for the best variants.
+Current: round 2. T10 done; T13 done (agent faults). Running: T11 screen (`vlm_screen_s0_round2`), T12 seeds 1–2
+(`vlm_trust_s12`, `vlm_imgflag_s12`), T14 CARLA replays (`carla_v2_imgflag_r4`, `_r4_ped`; `_r5` done). Next: T15.
 
 Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs/falsify/`):
 - B3 done: `nuscenes_gpu_v1`, C2/C3 × R1/R2/R3/R6 × random/TPE, 960 trials (checks_only).
@@ -28,6 +27,7 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 | T1a | (this commit) | 4 CARLA campaigns complete: 160 runs (summary.md 40 each), all exit 0 | resumed with `--resume`; confirmation running |
 | T2b | (this commit) | CARLA triage: 29 R4 + 1 R5 violation (1 collision), all undetected C2 rotations; 0 bug candidates | falsification log, CARLA section |
 | T1 | (this commit) | CARLA confirmation: 10 replays with Ours-full, exit 0; the collision scenario also collides with Ours-full | B5 complete |
+| T13 | (this commit) | `vlm_agent_s0`: 729 frames, 0 errors; 181 passed, ruff clean | recovery 0.661 Ours-full, 0.622 `think_trust`, 0.661 `imgflag`; unnecessary fallback 0.056 / 0.089 / 0.154 |
 
 ## Drive
 - Report Doc `1TejQjwoDeW_gQMlVCWMl-G1R87ICXqNJk1hCnP4fHA8`, updated in place (title unchanged).
@@ -57,6 +57,15 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
   `docs/media/` of the public repo (data figures were local-only before). If you prefer them private: remove them
   from the repo after the Doc is final (the Doc keeps its own copy of each image).
 - D5 (T4–T5): the variants run on the dev split only. A test-split run of a new variant needs your OK (spec §5.4).
+- D9 (round 2): the exploration stops after round 2 (9 variants). The variants now cover reasoning first (with and
+  without the frozen guidance), no checks at all, the three-step flow (VLM features → checks → final VLM call, in three
+  forms), per-sensor views, and the VLM as a feature extractor for the pipeline. More variants would mean tuning prompts
+  on the same 6 dev scenes, with no held-out data to check them on (the test split needs D5). If you prefer otherwise:
+  name the next variant; each screen costs about 1–1.5 h of VLM time on 3 GPUs.
+- D10 (T13): the image check of `imgflag*` is a feature call, so the agent faults A1–A3 do not reach it (as for the
+  stage-1 calls of round 1). `imgflag_checks` has no other VLM call and is therefore left out of the agent-fault table.
+  If you prefer otherwise: apply A1/A3 to the image check (an invalid or late answer then means "no VLM flag", so the
+  method falls back to checks-only) and define a flip for A2 (ok ↔ abnormal per camera); about 30 lines and one run.
 
 ## Blockers
 (none)
