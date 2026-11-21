@@ -130,3 +130,10 @@ Triage (from the step logs):
 **Bug candidates: 0.** Every violation is a missed detection (the S6b class of the shield proof): a rotation the
 camera–LiDAR cross-check does not see. Misalignment (C2) is the weak spot both on nuScenes (test F1 0.47) and in
 closed loop, and the closed-loop search found a collision that E3 (C1 only) could not show.
+
+Replay with Ours-full (`--confirm 5 --method ours_full`, the 5 lowest-R5 scenarios per hazard;
+`outputs/falsify/carla_v1_confirm_{pedestrian,lead_brake}/`):
+- Pedestrian: the collision scenario (random trial 31, 7.1° rotation) also collides with Ours-full (R5 −0.036 vs
+  −0.101 with checks-only): the VLM does not see the rotation either. The other four hold with both methods.
+- Lead car braking: no campaign violated R5, so the five lowest-R5 scenarios are ties at R5 = 0.5; all hold with
+  Ours-full. (The R4 violations of this hazard were not replayed: the replay selects by R5, as planned.)

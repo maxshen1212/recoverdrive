@@ -7,8 +7,9 @@
 - Continues `docs/superpowers/runs/2026-11-20-course-requirements.md` (Phase B tasks B3–B7).
 
 ## Status
-Current: T1 confirmation running (2 CARLA servers + vLLM on GPU 7, port 8001); T4 screening running on GPU 4
-(port 8002). Next: restart the screening on both servers after the confirmation; then `think_trust` (D7).
+Current: T4 screening restarted at 04:19 on both vLLM servers (GPU 4 port 8002, GPU 7 port 8001; finished
+frames replay from the cache); `think_trust` (D7) runs in parallel as `vlm_screen_s0_trust`. T1 done. Next: replay of
+the counterexamples with the best variant (T5), then figures and report.
 
 Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs/falsify/`):
 - B3 done: `nuscenes_gpu_v1`, C2/C3 × R1/R2/R3/R6 × random/TPE, 960 trials (checks_only).
@@ -26,6 +27,7 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 | T2a | (this commit) | triage of `gpu_v1`: 209 violating trials, 0 bug candidates; confirmations 145/147 and 67/67 still violated with Ours-full | falsification log, Phase B sections |
 | T1a | (this commit) | 4 CARLA campaigns complete: 160 runs (summary.md 40 each), all exit 0 | resumed with `--resume`; confirmation running |
 | T2b | (this commit) | CARLA triage: 29 R4 + 1 R5 violation (1 collision), all undetected C2 rotations; 0 bug candidates | falsification log, CARLA section |
+| T1 | (this commit) | CARLA confirmation: 10 replays with Ours-full, exit 0; the collision scenario also collides with Ours-full | B5 complete |
 
 ## Deferred questions
 - D3 (T3): variant prompts are written once, not tuned (one smoke check for format errors only).
