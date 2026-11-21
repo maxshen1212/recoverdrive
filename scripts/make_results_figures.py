@@ -268,6 +268,35 @@ def fig9_cost(rows: dict[str, dict], name: str) -> None:
     plt.close(fig)
 
 
+BLUES = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
+
+
+def fig10_per_fault(pf: dict[str, dict[str, float]], faults: list[str], name: str) -> None:
+    """Per-fault F1 heatmap: one sequential hue, every cell labeled."""
+    from matplotlib.colors import LinearSegmentedColormap
+
+    methods = [m for m in ("checks_only", "ours_full", *VARIANTS) if m in pf]
+    vals = np.array([[pf[m].get(f) if pf[m].get(f) is not None else np.nan for f in faults] for m in methods])
+    cmap = LinearSegmentedColormap.from_list("blues", BLUES)
+    fig, ax = plt.subplots(figsize=(8.2, 0.7 + 0.42 * len(methods)))
+    ax.imshow(vals, cmap=cmap, vmin=0, vmax=1, aspect="auto")
+    for i in range(len(methods)):
+        for j in range(len(faults)):
+            v = vals[i, j]
+            if not np.isnan(v):
+                ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=9,
+                        color="#ffffff" if v >= 0.55 else INK)
+    ax.set_xticks(range(len(faults)), faults)
+    ax.set_yticks(range(len(methods)), [NAMES.get(m, m) for m in methods])
+    ax.tick_params(length=0)
+    for s in ax.spines.values():
+        s.set_visible(False)
+    ax.set_title("F1 per fault type on the dev split (seed 0); darker is better", fontsize=10.5, loc="left")
+    fig.tight_layout()
+    fig.savefig(OUT / name, dpi=160)
+    plt.close(fig)
+
+
 # --- tables ------------------------------------------------------------------------------------------------------
 
 COLS = [("F1", "F1"), ("P", "P"), ("R", "R"), ("sensor_acc", "sensor acc."), ("false_alarm", "false alarm"),
@@ -331,6 +360,7 @@ def main() -> None:
         fig8_variants(rows, f"VLM-centric variants on the dev split (seed {a['seeds'][0]}, faults "
                             f"{' '.join(a['faults'])}; {len(recs)} frames)", "fig8_vlm_variants_screen.png")
         fig9_cost(rows, "fig9_cost_vs_f1.png")
+        fig10_per_fault(summary["screen"]["per_fault_f1"], a["faults"], "fig10_per_fault_f1.png")
         md += ["", f"## VLM-centric variants, dev screening ({args.screen}: {len(recs)} frames)", "",
                md_method_table(rows), "", "Per-fault F1:", "",
                "| method | " + " | ".join(a["faults"]) + " |", "|---|" + "---|" * len(a["faults"])]
