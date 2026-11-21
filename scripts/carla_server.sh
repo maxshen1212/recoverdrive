@@ -4,6 +4,7 @@
 # The server has Mesa Vulkan drivers next to NVIDIA's; without VK_ICD_FILENAMES the render thread can pick a
 # non-NVIDIA device and hang ("GameThread timed out waiting for RenderThread"). Vulkan adapter numbering differs
 # from CUDA's: check `nvidia-smi` after start to see which GPU it uses.
+# Wait ~30 s after the start before a client connects: an early connection can leave the server loading for minutes.
 # Usage: [CARLA_ROOT=...] [CARLA_PORT=2000] [CARLA_ADAPTER=1] ./scripts/carla_server.sh
 set -euo pipefail
 CARLA_ROOT="${CARLA_ROOT:-/data/$USER/carla/CARLA_0.9.16}"

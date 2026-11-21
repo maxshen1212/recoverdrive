@@ -150,9 +150,15 @@ uv run python scripts/run_eval.py --split test --faults all \
 wget https://carla-releases.s3.us-east-005.backblazeb2.com/Linux/CARLA_0.9.16.tar.gz       # 8.3 GB
 mkdir -p ~/carla/CARLA_0.9.16 && tar xzf CARLA_0.9.16.tar.gz -C ~/carla/CARLA_0.9.16
 CARLA_ROOT=~/carla/CARLA_0.9.16 ./scripts/carla_server.sh > carla.log 2>&1 &              # headless, ~5 GB GPU
+sleep 30                                                                                  # see the note below
 uv run python scripts/run_e3.py --seeds 0 1 2 --tag e3_final                              # VLM server must be running
 pkill -INT -f "[C]arlaUE4-Linux-Shipping"
 ```
+
+Wait about 30 s after starting the server before any client connects (`run_e3.py`, `falsify_carla.py`). On the
+gvl2 server, a client that connected right after the start left the server loading for more than 10 minutes, so the
+client's 120 s timeout ran out; with a 30 s wait the server was ready every time. `CARLA_ADAPTER` (default 1) picks the
+GPU; on a shared server set it to a free one.
 
 The CARLA Python client is installed by `uv sync`. `carla_server.sh` needs the NVIDIA Vulkan driver
 (`nvidia_icd.json`; set `VK_ICD_FILENAMES` if it is not in `/etc/vulkan/icd.d/` or `/usr/share/vulkan/icd.d/`).
