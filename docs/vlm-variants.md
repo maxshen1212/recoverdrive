@@ -149,7 +149,35 @@ of a false flag with a fault elsewhere (for example 14 alarms on L2 frames, a Li
   frames abnormal. Pooled F1 stays at 0.726: the C2/C3/L2 gains are paid for by false alarms everywhere else. The
   deciding VLM call adds nothing over the rules here (image flag → checks-only: F1 0.723 with one call per frame).
 - **More calls are not better.** The per-sensor variant uses 9.3 calls per frame (4.5 times Ours-full) and has the
-  second-lowest F1 (0.508; 0.07 on C1).
+  second-lowest F1 (0.508; 0.07 on C1) (`docs/media/vlm_cost.png`).
+- **The results hold over 3 seeds and under agent faults, but not in closed loop.** Over seeds 0–2 the variants that
+  keep the frozen call have the F1 of Ours-full within ±0.02 (below), and they keep its re-ask recovery under A1–A3. In
+  CARLA, the image flag never caught the rotated front camera that caused the falsification's violations, and it
+  raised "frozen" false alarms on the rear camera (last section).
+
+Not done: the test split. A new variant on the test split needs the user's approval (spec §5.4; deferred question D5).
+No variant beat Ours-full on the dev split, so no test run is planned unless it is asked for.
+
+### Seeds 0–2 (round 2)
+
+The references, `think_trust` and the two image-flag variants on seeds 1–2 as well (`outputs/eval/vlm_trust_s12`,
+`vlm_imgflag_s12`: 84 runs each, 3,402 frames each, 0 frame errors), pooled with seed 0: 5,103 frames per method, mean ±
+standard deviation over the 3 seeds (`docs/media/vlm_variants_seeds.png`).
+
+| Method | F1 | Right sensor | False alarm | Unnecessary fallback | Missed fallback | VLM calls per frame |
+|---|---|---|---|---|---|---|
+| Checks-only (no VLM) | 0.730 ± 0.003 | 0.946 ± 0.008 | 0.087 ± 0.005 | 0.044 ± 0.003 | 0.079 ± 0.004 | 0 |
+| Ours-full (frozen) | 0.729 ± 0.003 | 0.947 ± 0.010 | 0.089 ± 0.006 | 0.050 ± 0.002 | 0.079 ± 0.004 | 2.07 |
+| Think, trusting the checks | 0.726 ± 0.005 | 0.885 ± 0.006 | 0.149 ± 0.001 | 0.084 ± 0.001 | 0.071 ± 0.007 | 2.29 |
+| VLM image flag → Ours | 0.727 ± 0.002 | 0.842 ± 0.006 | 0.251 ± 0.004 | 0.149 ± 0.002 | 0.056 ± 0.001 | 3.48 |
+| VLM image flag → checks-only | 0.726 ± 0.003 | 0.844 ± 0.001 | 0.267 ± 0.003 | 0.137 ± 0.001 | 0.054 ± 0.002 | 1.00 |
+
+Block-bootstrap intervals over the fault episodes of all 3 seeds (Ours-full minus the method): F1 +0.004 [−0.008,
++0.015] for `think_trust`, +0.003 [−0.012, +0.016] for image flag → Ours, +0.004 [−0.011, +0.018] for image flag →
+checks-only, so no F1 difference; missed fallback +0.008 [+0.003, +0.013], +0.024 [+0.018, +0.030] and +0.025 [+0.020,
++0.032] (the variants miss fewer); false alarm −0.059 [−0.072, −0.048], −0.162 [−0.182, −0.142] and −0.178 [−0.199,
+−0.157] (the variants raise more). The seed-0 picture holds: these variants trade false alarms for missed fallbacks at
+the same F1.
 
 ### Agent faults (round 2)
 

@@ -7,7 +7,8 @@
 - Continues `docs/superpowers/runs/2026-11-20-course-requirements.md` (Phase B tasks B3–B7).
 
 ## Status
-Current: round 2. T10 done; T13 done (agent faults). T11, T14 done. Running: T12 seeds 1–2 (`vlm_trust_s12`, `vlm_imgflag_s12`). Next: T15.
+Current: round 2. T10–T14 done; vLLM stopped (GPUs 3, 4, 7 at 2 MiB). Next: T15 (figures pushed, report Doc,
+provenance Doc, Drive, merge and push).
 
 Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs/falsify/`):
 - B3 done: `nuscenes_gpu_v1`, C2/C3 × R1/R2/R3/R6 × random/TPE, 960 trials (checks_only).
@@ -22,13 +23,29 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 |---|---|---|---|
 | T0 | 77bfb9f | 170 passed, ruff clean | plan, run log, CARLA `--resume` / `--confirm` |
 | T3 | dfd2846 | 175 passed, ruff clean; replay check 4830/4830 on `test_final` | `VLMVariant` (5 variants), prompts in `vlm.py`, `tests/test_variants.py`; resume keeps unreached rows |
-| T2a | (this commit) | triage of `gpu_v1`: 209 violating trials, 0 bug candidates; confirmations 145/147 and 67/67 still violated with Ours-full | falsification log, Phase B sections |
-| T1a | (this commit) | 4 CARLA campaigns complete: 160 runs (summary.md 40 each), all exit 0 | resumed with `--resume`; confirmation running |
-| T2b | (this commit) | CARLA triage: 29 R4 + 1 R5 violation (1 collision), all undetected C2 rotations; 0 bug candidates | falsification log, CARLA section |
-| T1 | (this commit) | CARLA confirmation: 10 replays with Ours-full, exit 0; the collision scenario also collides with Ours-full | B5 complete |
-| T13 | (this commit) | `vlm_agent_s0`: 729 frames, 0 errors; 181 passed, ruff clean | recovery 0.661 Ours-full, 0.622 `think_trust`, 0.661 `imgflag`; unnecessary fallback 0.056 / 0.089 / 0.154 |
-| T11 | (this commit) | `vlm_screen_s0_round2`: 42 runs, 1,701 frames, 0 errors; bootstrap vs Ours-full | `perceive_trust` F1 0.617 (gap +0.109 [+0.070, +0.149]); `imgflag` 0.726 (−0.001 [−0.028, +0.025]) with false alarm 0.246 vs 0.089; `imgflag_checks` 0.723 at 1 call/frame |
-| T14 | (this commit) | `carla_v2_imgflag_{r4,r4_ped,r5}`: 12 replays, all finished (the cut-off duplicate of the main R4 process is kept as `pedestrian_confirm.partial-20261121T0805`) | front camera isolated 0/153 fault steps; rear camera isolated on 65/308 clean steps ("frozen"); R4 3/10 coincidental fixes, 1 new violation; collision unchanged |
+| T2a | 2fd9cfe | triage of `gpu_v1`: 209 violating trials, 0 bug candidates; confirmations 145/147 and 67/67 still violated with Ours-full | falsification log, Phase B sections |
+| T6a | c8361ce | tests and ruff at commit time | figure, diagram and video scripts; experiment table |
+| T6b | 741de3a | tests and ruff at commit time | assurance figure reads all falsification outputs |
+| T5a | d3095f1 | tests and ruff at commit time | `think_trust` ablation variant (D7) |
+| T1a/T2b | 2b4a032 | tests and ruff at commit time | CARLA campaigns complete and triaged |
+| T6c | ad13504 | tests and ruff at commit time | results figures merge extra tags; bootstrap intervals |
+| T1 | d507ced | CARLA confirmation: 10 replays with Ours-full, exit 0; the collision scenario also collides with Ours-full | B5 complete |
+| B7 | 339f4ce | tests and ruff at commit time | Phase B numbers in the verification text |
+| T8a | a512894 | tests and ruff at commit time | demo video on Drive |
+| T6d | cceadb6 | tests and ruff at commit time | final falsification figure and assurance case |
+| T8a | 77242e2 | tests and ruff at commit time | report Doc phase 1 |
+| T6e | df05870 | tests and ruff at commit time | results figures union several tags for the seed table |
+| T6f | 648712a | tests and ruff at commit time | variant figures (comparison and per-fault F1) |
+| T4-T7 | 899e1d8 | tests and ruff at commit time | variant results, replays, figures and docs |
+| T8 | f567c6f | tests and ruff at commit time | report Doc, provenance Doc and Drive uploads |
+| T9 | 0ce577c | `main` fast-forwarded to the branch (the repo's linear-history convention); in the main checkout `uv sync` builds torch 2.14.1+cu126 (CUDA available), 176 passed, ruff clean; replay check 4830/4830; pushed over HTTPS: origin/main eb34fe3..f567c6f | the worktree is kept (it holds `outputs/e3/regress_gvl2`) |
+| T10 | 9a55dcb | 180 passed, ruff clean; replay check 4830/4830 | `perceive_trust` (the 3-step flow with the frozen guidance), `imgflag` (VLM image-quality flag + frozen Ours), `imgflag_checks` (VLM flag + rules only); new flag name `vlm_image` |
+| T14a | bd13b34 | tests and ruff at commit time | CARLA replays can rank scenarios by R4 (`--by`) |
+| round-2 | 47b6f2b | tests and ruff at commit time | round-2 plan (T10–T15) after the stop-hook review |
+| T13 | e315700 | `vlm_agent_s0`: 729 frames, 0 errors; 181 passed, ruff clean | recovery 0.661 Ours-full, 0.622 `think_trust`, 0.661 `imgflag`; unnecessary fallback 0.056 / 0.089 / 0.154 |
+| T11 | 67f9493 | `vlm_screen_s0_round2`: 42 runs, 1,701 frames, 0 errors; bootstrap vs Ours-full | `perceive_trust` F1 0.617 (gap +0.109 [+0.070, +0.149]); `imgflag` 0.726 (−0.001 [−0.028, +0.025]) with false alarm 0.246 vs 0.089; `imgflag_checks` 0.723 at 1 call/frame |
+| T14 | e0a5990 | `carla_v2_imgflag_{r4,r4_ped,r5}`: 12 replays, all finished (the cut-off duplicate of the main R4 process is kept as `pedestrian_confirm.partial-20261121T0805`) | front camera isolated 0/153 fault steps; rear camera isolated on 65/308 clean steps ("frozen"); R4 3/10 coincidental fixes, 1 new violation; collision unchanged |
+| T12 | (this commit) | `vlm_trust_s12`, `vlm_imgflag_s12`: 84 runs and 3,402 frames each, 0 frame errors; figures regenerated | 3 seeds: F1 0.729 ± 0.003 Ours-full, 0.726 ± 0.005 `think_trust`, 0.727 ± 0.002 `imgflag`, 0.726 ± 0.003 `imgflag_checks`; dataflow diagram lists the round-2 variants |
 
 ## Drive
 - Report Doc `1TejQjwoDeW_gQMlVCWMl-G1R87ICXqNJk1hCnP4fHA8`, updated in place (title unchanged).
@@ -37,22 +54,20 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
   (`16TnNjXg6KOq0jPG1VVI-2WtfMhUDf2w7`, 7,020,097 bytes) and 7 figures.
 - `experiment_result/recoverdrive_results_2026-11-21_{summaries,screen_frames_part1,screen_frames_part2,trust_frames}.zip`
   (split because the connector refuses requests over 10 MB).
-| T9 | f567c6f (merge), this commit | `main` fast-forwarded to the branch (the repo's linear-history convention); in the main checkout `uv sync` builds torch 2.14.1+cu126 (CUDA available), 176 passed, ruff clean; replay check 4830/4830; pushed over HTTPS: origin/main eb34fe3..f567c6f | the worktree is kept (it holds `outputs/e3/regress_gvl2`) |
-| T10 | (this commit) | 180 passed, ruff clean; replay check 4830/4830 | `perceive_trust` (the user's 3-step flow with the frozen guidance), `imgflag` (VLM image-quality flag + frozen Ours), `imgflag_checks` (VLM flag + rules only); new flag name `vlm_image` |
 
 ## Deferred questions
 - D3 (T3): variant prompts are written once, not tuned (one smoke check for format errors only).
 - D4 (T5): the 2 variants with the best pooled `_full` F1 on dev seed 0 (fallback errors within 0.02 of Ours-full)
   get seeds 1–2.
 - D6 (T4): the screening covers the 7 sensor faults only (one vLLM server; no second GPU was free at 03:30). The
-  agent faults A1–A3 test the re-ask and vote, which all variants share with Ours-full; they run for the top
-  variants in T5. If you prefer otherwise: add A1–A3 to the screen (about +40% VLM time).
+  agent faults A1–A3 test the re-ask and vote, which all variants share with Ours-full. Closed in round 2: A1–A3 ran
+  for Ours-full, `think_trust` and `imgflag` (`vlm_agent_s0`); see D10 for `imgflag_checks`.
 - D7 (T5): plan change. The partial screen showed every variant below Ours-full in recall. `think` changes two
-  things at once (reasoning first, and "the checks can be wrong"), so T5 adds the clean ablation `think_trust`
-  (frozen prompt + reasoning field) on the same frames, and replays the falsification counterexamples with the
-  most promising variant. Seeds 1–2 run only if a variant beats Ours-full on seed 0; otherwise block-bootstrap
-  intervals over fault episodes on seed 0 measure the gap. If you prefer otherwise: 3 seeds for the best 2
-  variants anyway (about 4–5 h of VLM time on one shared GPU).
+  things at once (reasoning first, and "the checks can be wrong"), so T5 added the clean ablation `think_trust`
+  (frozen prompt + reasoning field) on the same frames, and replayed the falsification counterexamples with the
+  most promising variants; block-bootstrap intervals over fault episodes measured the gaps. Closed in round 2: seeds
+  1–2 ran for the references, `think_trust` and both image-flag variants (5,103 frames per method); the seed-0
+  conclusions hold (same F1 within ±0.02, the variants trade false alarms for missed fallbacks).
 - D8 (T8): Doc images come from raw.githubusercontent.com at the pushed commit, because the Docs API inserts images
   only from a public URL and the server has no Drive client for large files. The new figures are therefore in
   `docs/media/` of the public repo (data figures were local-only before). If you prefer them private: remove them

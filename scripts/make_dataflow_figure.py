@@ -78,9 +78,9 @@ def draw(out: Path) -> None:
     box(ax, L, 742, R - L, 160, "vlm", "Diagnosis agent: Qwen3-VL-8B on vLLM (JSON-schema output)",
         "in: mosaic, previous mosaic, top view, check report · out: verdict (ok / uncertain / fault:<sensor>), "
         "fault type, confidence\n"
-        "Ours (frozen): 1 call, told the checks are reliable · think: reasons first, checks may be wrong\n"
-        "perceive: 1 call writes notes on every sensor, 1 call decides · per-sensor: 6 camera + 1 LiDAR notes, "
-        "then decides\n_nochecks variants: no check report at all")
+        "Ours (frozen): 1 call, checks are reliable · think: reasons first, checks may be wrong (_trust: reliable)\n"
+        "perceive: notes on every sensor, then decides (_trust: frozen guidance) · per-sensor: 6 camera + 1 LiDAR notes\n"
+        "image flag: 1 call marks abnormal camera images → one more CheckReport flag · _nochecks: no check report")
     box(ax, L, 944, R - L, 92, "code", "Recovery controller",
         "re-ask a bad answer · 3-sample vote (T = 0.7) · re-observe · isolate the sensor · verify\n"
         "out: RecoveryResult (state, isolated sensors)")
