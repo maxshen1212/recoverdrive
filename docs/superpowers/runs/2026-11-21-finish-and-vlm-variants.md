@@ -7,7 +7,9 @@
 - Continues `docs/superpowers/runs/2026-11-20-course-requirements.md` (Phase B tasks B3–B7).
 
 ## Status
-Current: T1 running (4 CARLA campaigns on GPU 7 since 03:20); T3 done. Next: T4 dev screening (vLLM on GPU 4).
+Current: T1 running (CARLA campaigns on GPU 7; pedestrian TPE restarted at 03:27 on port 2040 after its server did
+not answer in 120 s). T4 running since 03:31: `vlm_screen_s0` (dev, 7 sensor faults, seed 0, 14 method outputs) on one
+vLLM server (GPU 4, port 8002). T2 nuScenes part done. Next: T6 figure scripts while the runs go on.
 
 Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs/falsify/`):
 - B3 done: `nuscenes_gpu_v1`, C2/C3 × R1/R2/R3/R6 × random/TPE, 960 trials (checks_only).
@@ -21,12 +23,16 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 | Task | Commit | Verification | Notes |
 |---|---|---|---|
 | T0 | 77bfb9f | 170 passed, ruff clean | plan, run log, CARLA `--resume` / `--confirm` |
-| T3 | (this commit) | 175 passed, ruff clean; replay check 4830/4830 on `test_final` | `VLMVariant` (5 variants), prompts in `vlm.py`, `tests/test_variants.py`; resume keeps unreached rows |
+| T3 | dfd2846 | 175 passed, ruff clean; replay check 4830/4830 on `test_final` | `VLMVariant` (5 variants), prompts in `vlm.py`, `tests/test_variants.py`; resume keeps unreached rows |
+| T2a | (this commit) | triage of `gpu_v1`: 209 violating trials, 0 bug candidates; confirmations 145/147 and 67/67 still violated with Ours-full | falsification log, Phase B sections |
 
 ## Deferred questions
 - D3 (T3): variant prompts are written once, not tuned (one smoke check for format errors only).
 - D4 (T5): the 2 variants with the best pooled `_full` F1 on dev seed 0 (fallback errors within 0.02 of Ours-full)
   get seeds 1–2.
+- D6 (T4): the screening covers the 7 sensor faults only (one vLLM server; no second GPU was free at 03:30). The
+  agent faults A1–A3 test the re-ask and vote, which all variants share with Ours-full; they run for the top
+  variants in T5. If you prefer otherwise: add A1–A3 to the screen (about +40% VLM time).
 - D5 (T4–T5): the variants run on the dev split only. A test-split run of a new variant needs your OK (spec §5.4).
 
 ## Blockers

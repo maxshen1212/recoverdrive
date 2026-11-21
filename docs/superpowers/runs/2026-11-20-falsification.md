@@ -57,8 +57,47 @@ None traces to the logic of the recovery controller or the shield, which Tasks 4
 - These results are also the starting point for the method work: a VLM that judges the images itself could cover the
   A3 and detection-limit classes.
 
-## Phase B (waits for free GPUs)
+## Phase B: C2/C3 campaigns (GPU)
 
-- C2 and C3 campaigns (new images, SAM 3).
-- Replay of the worst trials with Ours-full (VLM).
-- CARLA closed-loop falsification (R4, R5).
+- `scripts/falsify_nuscenes.py --faults C2 C3 --specs R1 R2 R3 R6 --budget 60 --tag gpu_v1` at commit `89d95d7`
+  (clean tree) on gvl2, SAM 3 on a GPU for the new faulted images. Output: `outputs/falsify/nuscenes_gpu_v1/`.
+- Scale: 16 campaigns (2 faults × 4 requirements × 2 samplers) with 60 trials each, 960 trials.
+
+| | Random | Guided (TPE) |
+|---|---|---|
+| Violating trials | 43 / 480 (9%) | 166 / 480 (35%) |
+| Violating trials after the 10 shared start-up trials | 34 | 157 |
+
+- TPE found more violations in 6 of 8 (fault, requirement) pairs. Random found more in 2: C3/R1 (7 vs 0) and C3/R6
+  (1 vs 0). Guided search is not better everywhere: when violations are rare and scattered (a C3 level just above
+  the detection limit), the model TPE builds from the first trials can lead it away from them.
+
+Triage (`scripts/triage_falsification.py --run outputs/falsify/nuscenes_gpu_v1`, 209 violating trials):
+
+| Cause | Trials | Class |
+|---|---|---|
+| False alarm of the checks on a clean frame | 88 | known false-alarm rate of the checks |
+| Missed: fault below the detection limit of the checks | 30 | detection limit (small rotations or shifts, mild blur) |
+| Other sensors flagged after the episode | 26 | false alarm |
+| Evidence intermittent: the check misses one frame of an active fault | 23 | detection limit |
+| First clean frame after the episode | 14 | by design (one step of recovery lag) |
+| Missed: camera has < 2 reference objects | 9 | assumption A3 violated |
+| Missed: level near the low/medium label boundary | 8 | label boundary |
+| Evidence lost: < 2 reference objects | 7 | assumption A3 violated |
+| The faulty sensor stays flagged after the episode | 4 | temporal checks compare with the still-faulty previous frame |
+
+**Bug candidates: 0.** The classes are the same as in Phase A.
+
+## Phase B: replay of the worst counterexamples with Ours-full (VLM)
+
+`--confirm 10 --method ours_full` replays the 10 lowest-robustness violating trials of each (fault, requirement)
+pair with the full system (Qwen3-VL-8B, recovery, shield).
+
+| Source campaign | Replayed | Still violated with Ours-full |
+|---|---|---|
+| `cpu_v1` (C1, C4, L1, L2, L4) | 147 | 145 |
+| `gpu_v1` (C2, C3) | 67 | 67 |
+
+The VLM repairs 2 of 214 counterexamples of the deterministic checks. This matches Step 1 ("the VLM confirms the
+flags"): the Ours prompt tells the VLM that the checks are reliable, so it follows them, including their false alarms
+and misses. This is the starting point of the VLM-centric variants (plan `2026-11-21-finish-and-vlm-variants.md`).
