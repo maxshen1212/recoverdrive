@@ -36,7 +36,8 @@ class CheckThresholds:
 
 # Flags that point at a faulty sensor. Others (e.g. no_reference) are informational.
 FAULT_FLAGS = ("low_match", "match_drop", "frozen", "low_points", "point_drop", "sector_gap", "low_visibility",
-               "camera_disagree", "invalid", "timeout")
+               "camera_disagree", "invalid", "timeout",
+               "vlm_image")  # VLM image-quality check (variants imgflag*, plan 2026-11-21); the checks never raise it
 
 
 def iou_matrix(a: np.ndarray, b: np.ndarray) -> np.ndarray:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import ClassVar
 
 import numpy as np
@@ -27,6 +27,8 @@ from recoverdrive.vlm import (
     camera_observe_messages,
     decide_messages,
     format_notes,
+    image_check_messages,
+    image_check_schema,
     image_part,
     lidar_observe_messages,
     observe_keys,
@@ -213,6 +215,9 @@ class VLMVariant(Ours):
 
     think            one call: images + check report, reasoning first
     think_trust      one call: the frozen Ours prompt (checks are reliable) + reasoning first (ablation of `think`)
+    perceive_trust   stage 1 notes (as perceive); stage 2 = think_trust with the notes as one more piece of evidence
+    imgflag          stage 1 asks the VLM only about image quality; an abnormal camera becomes one more flag
+                     (camera:<C>:vlm_image) in the report and the recovery; then the frozen Ours call decides
     think_nochecks   one call: images only, reasoning first
     perceive         stage 1 notes on every sensor from the images (no checks); stage 2 decides from notes + report + images
     perceive_nochecks  the same without the report
@@ -221,7 +226,7 @@ class VLMVariant(Ours):
     Stage-1 calls are not diagnosis calls: agent faults (A1-A3) hit only the deciding call, as for Ours."""
 
     VARIANTS: ClassVar[tuple[str, ...]] = ("think", "think_nochecks", "perceive", "perceive_nochecks", "percam",
-                                           "think_trust")
+                                           "think_trust", "perceive_trust", "imgflag")
     MAX_TOKENS: ClassVar[dict[str, int]] = {"decide": 768, "observe": 640, "sensor": 200}
     CAMERA_PX: ClassVar[tuple[int, int]] = (960, 540)
 
@@ -236,8 +241,8 @@ class VLMVariant(Ours):
         return image_part(np.asarray(Image.fromarray(image).resize(self.CAMERA_PX, Image.BILINEAR)))
 
     def observe(self, ctx: FrameContext) -> tuple[str | None, list[Attempt]]:
-        """Stage 1: the VLM's own notes on every sensor (none for the one-call variants)."""
-        if self.variant.startswith("think"):
+        """Stage 1: the VLM's own notes on every sensor (none for the one-call variants and imgflag)."""
+        if self.variant.startswith("think") or self.variant == "imgflag":
             return None, []
         cams = [s.split(":", 1)[1] for s in ctx.sensors if s.startswith("camera:")]
         if self.variant.startswith("perceive"):
@@ -265,8 +270,10 @@ class VLMVariant(Ours):
                  attempt_idx: int | None = None) -> Attempt:
         summary = None if self.no_checks else ctx.summary
         prev = None if self.variant == "percam" else ctx.prev_mosaic  # percam's notes already compare frames
-        if self.variant == "think_trust":
-            msgs = think_trust_messages(ctx.summary, ctx.mosaic, ctx.prev_mosaic, ctx.bev)
+        if self.variant == "imgflag":  # the frozen Ours call on the report extended by the VLM image check
+            return super().diagnose(ctx, temperature, seed, attempt_idx)
+        if self.variant in ("think_trust", "perceive_trust"):
+            msgs = think_trust_messages(ctx.summary, ctx.mosaic, ctx.prev_mosaic, ctx.bev, self.notes)
         else:
             msgs = decide_messages(summary, self.notes, ctx.mosaic, prev, ctx.bev)
         return self.caller.call(msgs, think_schema(ctx.sensors), temperature=temperature, seed=seed,
@@ -275,6 +282,9 @@ class VLMVariant(Ours):
     def step(self, ctx: FrameContext) -> dict[str, MethodOutput]:
         self.caller.new_frame(ctx.agent_fault)
         self.notes, stage1 = self.observe(ctx)
+        if self.variant == "imgflag":
+            flags, details, att = image_flags(self.caller, ctx)
+            ctx, stage1 = with_image_flags(ctx, flags, details), [att]
         outputs = super().step(ctx)
         lat = sum(a.latency_s for a in stage1)
         for out in outputs.values():
@@ -283,6 +293,28 @@ class VLMVariant(Ours):
             out.extra["stage1"] = [attempt_record(a) for a in stage1]
             out.extra.setdefault("timing", {})["vlm_stage1"] = lat
         return outputs
+
+
+def image_flags(caller: AgentCaller, ctx: FrameContext) -> tuple[list[str], str, Attempt]:
+    """The VLM's image-quality check (not a diagnosis call): flags camera:<C>:vlm_image for abnormal cameras."""
+    cams = [s.split(":", 1)[1] for s in ctx.sensors if s.startswith("camera:")]
+    att = caller.call(image_check_messages(ctx.mosaic, ctx.prev_mosaic), image_check_schema(cams), max_tokens=200,
+                      diagnosis=False, name="image_check")
+    if not att.valid:
+        return [], "", att
+    bad = [c for c in cams if att.data.get(c) == "abnormal"]
+    return [f"camera:{c}:vlm_image" for c in bad], str(att.data.get("details", "")).strip(), att
+
+
+def with_image_flags(ctx: FrameContext, flags: list[str], details: str) -> FrameContext:
+    """A copy of the frame context with the VLM image flags added to the report flags and one summary line. With no
+    flag the context is returned unchanged, so the deciding call is the frozen Ours call (and hits its cache)."""
+    if not flags:
+        return ctx
+    cams = ", ".join(f.split(":")[1] for f in flags)
+    line = f"A separate image-quality check by the VLM marks as abnormal: {cams} ({details})."
+    report = replace(ctx.check.report, flags=[*ctx.check.report.flags, *flags])
+    return replace(ctx, check=replace(ctx.check, report=report), summary=ctx.summary + "\n" + line)
 
 
 def rules_outcome(result: RecoveryResult, ranked: list[str]) -> tuple[bool, str]:
@@ -314,6 +346,30 @@ class ChecksOnly:
             extra["agent_recovered"] = True  # no VLM call, so the agent fault has no effect (as with the VLM gate)
         return {"checks_only": MethodOutput(None, True, alarm, pred, recovery=result, action=shield(result),
                                             n_calls=0, extra=extra)}
+
+
+class ImageFlagChecks:
+    """Checks-only plus the VLM's image-quality check as one more flag, with no deciding VLM call: the VLM is used only
+    as a feature extractor for image faults (plan 2026-11-21). Its call is not a diagnosis call, so agent faults do
+    not reach it (as for the stage-1 calls of the variants)."""
+
+    names = ("imgflag_checks_full",)
+
+    def __init__(self, client: VLMClient, cfg: dict):
+        self.caller = AgentCaller(client)
+        self.controller = RecoveryController(RecoveryConfig(**cfg.get("recovery", {})))
+
+    def step(self, ctx: FrameContext) -> dict[str, MethodOutput]:
+        self.caller.new_frame(ctx.agent_fault)
+        flags, _, att = image_flags(self.caller, ctx)
+        ranked = rank_sensors([*ctx.check.report.flags, *flags])
+        result = self.controller.step_suspects(set(ranked), 1.0, set(ranked), ["rules"])
+        alarm, pred = rules_outcome(result, ranked)
+        extra: dict = {"flagged": ranked, "vlm_flags": flags, "stage1": [attempt_record(att)]}
+        if ctx.agent_fault is not None:
+            extra["agent_recovered"] = True
+        return {"imgflag_checks_full": MethodOutput(None, True, alarm, pred, recovery=result, action=shield(result),
+                                                    n_calls=1, latency_s=att.latency_s, extra=extra)}
 
 
 class B0:
@@ -389,7 +445,7 @@ def build_methods(names: list[str], client: VLMClient | None, cfg: dict) -> list
     """One object per method family; each keeps its own per-run state."""
     methods: list = []
     variant_names = tuple(f"{v}_{k}" for v in VLMVariant.VARIANTS for k in ("detect", "full"))
-    known = ("B0", "B1", "B2", "B3", "ours_detect", "ours_full", "checks_only", *variant_names)
+    known = ("B0", "B1", "B2", "B3", "ours_detect", "ours_full", "checks_only", "imgflag_checks_full", *variant_names)
     unknown = [n for n in names if n not in known]
     if unknown:
         raise ValueError(f"unknown methods: {unknown}")
@@ -397,6 +453,8 @@ def build_methods(names: list[str], client: VLMClient | None, cfg: dict) -> list
         methods.append(B0())
     if "checks_only" in names:
         methods.append(ChecksOnly(cfg))
+    if "imgflag_checks_full" in names:
+        methods.append(ImageFlagChecks(client, cfg))
     methods += [TextChain(n, client) for n in ("B1", "B2", "B3") if n in names]
     ours = tuple(n for n in ("ours_detect", "ours_full") if n in names)
     if ours:

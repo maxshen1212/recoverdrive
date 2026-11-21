@@ -93,3 +93,56 @@ def test_think_trust_keeps_the_frozen_guide_and_adds_reasoning():
     assert "The deterministic checks are reliable" in text and "flags can be wrong" not in text
     assert "write your step-by-step reasoning in the field analysis" in text
     assert next(iter(fake.calls[0]["response_format"]["json_schema"]["schema"]["properties"])) == "analysis"
+
+
+def image_replier(state: str, decide: dict = OK):
+    def reply(req):
+        name = schema_name(req)
+        if name == "image_check":
+            return {"CAM_FRONT": state, "details": "the image is tilted"}
+        if name == "observe":
+            return {"CAM_FRONT": "a sharp road view", "LIDAR_TOP": "dense cloud all around"}
+        return decide
+    return reply
+
+
+def test_perceive_trust_keeps_the_frozen_guide_and_adds_the_notes():
+    m, fake = variant("perceive_trust")
+    m.step(make_ctx())
+    decide = next(r for r in fake.calls if schema_name(r) == "diagnosis")
+    text = text_of(decide)
+    assert "The deterministic checks are reliable" in text and "flags can be wrong" not in text
+    assert "- CAM_FRONT: a sharp road view" in text and "write your step-by-step reasoning" in text
+
+
+def test_imgflag_without_flag_sends_the_frozen_ours_call():
+    from recoverdrive.methods import Ours
+
+    fake = FakeOpenAI(image_replier("ok", {"verdict": "ok", "fault_type": "none", "confidence": 0.9, "evidence": "e"}))
+    m = VLMVariant("imgflag", VLMClient("http://x", "m", client=fake), CFG, ("imgflag_detect", "imgflag_full"))
+    m.step(make_ctx())
+    ours_fake = FakeOpenAI({"verdict": "ok", "fault_type": "none", "confidence": 0.9, "evidence": "e"})
+    Ours(VLMClient("http://x", "m", client=ours_fake), CFG).step(make_ctx())
+    decide = next(r for r in fake.calls if schema_name(r) == "diagnosis")
+    assert text_of(decide) == text_of(ours_fake.calls[0])  # same prompt, so the Ours cache answers it
+
+
+def test_imgflag_adds_the_vlm_flag_to_report_and_recovery():
+    fault = {"verdict": "fault:camera:CAM_FRONT", "fault_type": "misalignment", "confidence": 0.9, "evidence": "e"}
+    fake = FakeOpenAI(image_replier("abnormal", fault))
+    m = VLMVariant("imgflag", VLMClient("http://x", "m", client=fake), CFG, ("imgflag_detect", "imgflag_full"))
+    full = m.step(make_ctx())["imgflag_full"]
+    decide = next(r for r in fake.calls if schema_name(r) == "diagnosis")
+    assert "image-quality check by the VLM marks as abnormal: CAM_FRONT (the image is tilted)" in text_of(decide)
+    assert full.extra["flagged"] == ["camera:CAM_FRONT"] and full.extra["stage1"][0]["valid"]
+    assert full.recovery.isolated_sensors == ["camera:CAM_FRONT"]
+
+
+def test_imgflag_checks_uses_the_vlm_answer_as_one_more_flag():
+    from recoverdrive.methods import ImageFlagChecks
+
+    for state, isolated in (("abnormal", ["camera:CAM_FRONT"]), ("ok", [])):
+        fake = FakeOpenAI(image_replier(state))
+        out = ImageFlagChecks(VLMClient("http://x", "m", client=fake), CFG).step(make_ctx())["imgflag_checks_full"]
+        assert out.recovery.isolated_sensors == isolated and out.n_calls == 1
+        assert [schema_name(r) for r in fake.calls] == ["image_check"]

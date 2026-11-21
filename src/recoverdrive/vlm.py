@@ -252,7 +252,8 @@ FLAG_WORDS = {"low_match": "camera missed most expected objects", "match_drop": 
               "frozen": "image identical to the previous frame", "low_points": "far fewer LiDAR points than normal",
               "point_drop": "LiDAR point count dropped sharply", "sector_gap": "a LiDAR direction has no points",
               "low_visibility": "few nearby objects have LiDAR points",
-              "camera_disagree": "cameras see objects that have no LiDAR points"}
+              "camera_disagree": "cameras see objects that have no LiDAR points",
+              "vlm_image": "the VLM's image-quality check found an abnormal image"}
 
 
 def suspicious_sensors(report: CheckReport, fault_flags: list[str]) -> str:
@@ -605,10 +606,36 @@ THINK_TRUST_NOTE = ("Before the verdict, write your step-by-step reasoning in th
                     "words).")
 
 
-def think_trust_messages(summary: str, mosaic: dict, prev_mosaic: dict | None, bev: dict) -> list[dict]:
+def think_trust_messages(summary: str, mosaic: dict, prev_mosaic: dict | None, bev: dict,
+                         notes: str | None = None) -> list[dict]:
     """`think_trust`: the frozen Ours messages (checks are reliable) plus a reasoning field before the verdict, so
-    the effect of reasoning is separated from the effect of distrusting the checks (`think`)."""
+    the effect of reasoning is separated from the effect of distrusting the checks (`think`). `perceive_trust` adds
+    the VLM's own stage-1 notes as one more piece of evidence."""
     msgs = ours_messages(summary, mosaic, prev_mosaic, bev)
     content = list(msgs[1]["content"])
-    content[-1] = {"type": "text", "text": content[-1]["text"] + "\n\n" + THINK_TRUST_NOTE}
+    extra = "" if notes is None else "\n\nYour notes from a first look at the raw sensor data:\n" + notes
+    content[-1] = {"type": "text", "text": content[-1]["text"] + extra + "\n\n" + THINK_TRUST_NOTE}
     return [msgs[0], {"role": "user", "content": content}]
+
+
+IMAGE_CHECK_GUIDE = (
+    "Judge only the image quality and geometry of each camera tile, not the scene: is the image black, washed out, "
+    "blurred, noisy, tilted or rotated, shifted, or frozen (identical to the previous frame while the scene moves)? "
+    "Night, rain, glare, motion blur and empty roads are normal. Answer ok or abnormal for every camera, and in "
+    "details name the abnormal tiles and what is wrong (one short sentence)."
+)
+
+
+def image_check_schema(cameras: list[str]) -> dict:
+    """`imgflag*` stage 1: one ok/abnormal answer per camera (flat, so the shared JSON validator applies)."""
+    props = {c: {"type": "string", "enum": ["ok", "abnormal"]} for c in cameras}
+    props["details"] = {"type": "string"}
+    return {"type": "object", "properties": props, "required": list(props), "additionalProperties": False}
+
+
+def image_check_messages(mosaic: dict, prev_mosaic: dict | None) -> list[dict]:
+    content: list[dict] = [{"type": "text", "text": "Image 1: current frame, all cameras."}, mosaic]
+    if prev_mosaic is not None:
+        content += [{"type": "text", "text": "Image 2: previous frame (0.5 s earlier), same layout."}, prev_mosaic]
+    content.append({"type": "text", "text": IMAGE_CHECK_GUIDE})
+    return [{"role": "system", "content": VARIANT_SYSTEM}, {"role": "user", "content": content}]
