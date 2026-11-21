@@ -41,6 +41,10 @@ Tasks:
   but the environments pin CUDA 13 builds (`torch==2.14.1` cu130 in the main env, vLLM 0.32 in `serving/`), which
   need driver >= 580. The stack cannot use gvl2's GPUs as it is. Options: upgrade the driver (lab admin), build a
   CUDA 12 environment for gvl2 (new pins, recorded in provenance), or wait for the old server's GPUs.
+- 2026-11-21 00:40: checked the PyTorch index. `torch==2.14.1` has no CUDA 12 x86_64 wheel (cu126 has only aarch64;
+  cu128 none), and `serving/` pins vLLM 0.32.0 on the cu130 index. A CUDA 12 environment would therefore need older
+  torch and vLLM versions, not only another build, so new results would not be directly comparable. The driver
+  upgrade on gvl2 is the clean path.
 
 ## Waiting log
 - 2026-11-20 16:44–22:45: watcher 1 timed out after 6 h; no card ever had >= 8 GB free with <= 50% load (all 4 at
