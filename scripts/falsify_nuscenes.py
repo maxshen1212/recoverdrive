@@ -18,7 +18,7 @@ import json
 import math
 import os
 from collections import Counter
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import yaml
@@ -26,8 +26,10 @@ import yaml
 from recoverdrive.adapters.nuscenes import NuScenesAdapter
 from recoverdrive.cache import KVCache
 from recoverdrive.detectors.sam3 import CachedDetector
-from recoverdrive.falsify import CPU_FAULTS, FAULT_SPACES, GPU_FAULTS, campaign, evaluate_trial
+from recoverdrive.falsify import CPU_FAULTS, FAULT_SPACES, GPU_FAULTS, campaign, evaluate_trial, select_worst
+from recoverdrive.methods import VLM_FREE_METHODS
 from recoverdrive.runner import EvalEnv, git_state
+from recoverdrive.vlm import VLMClient, healthy_servers
 
 REPO = Path(__file__).resolve().parents[1]
 CAMERAS = ("CAM_FRONT", "CAM_FRONT_LEFT", "CAM_FRONT_RIGHT", "CAM_BACK", "CAM_BACK_LEFT", "CAM_BACK_RIGHT")
@@ -69,9 +71,49 @@ def make_env(args, out_dir: Path) -> EvalEnv:
     adapter = NuScenesAdapter(str(args.nuscenes_root), cfg["data"]["version"], cfg["data"]["cameras"],
                               cfg["categories"])
     s = cfg["sam3"]
-    detector = CachedDetector(KVCache(args.cache), s["prompts"], s["score_threshold"], s["model_id"],
-                              allow_miss=not args.cache_only)
-    return EvalEnv(cfg, adapter, detector, None, out_dir, [args.method])
+    cache = KVCache(args.cache)
+    detector = CachedDetector(cache, s["prompts"], s["score_threshold"], s["model_id"], allow_miss=not args.cache_only)
+    client = None
+    if args.method not in VLM_FREE_METHODS:
+        if not args.vlm_url:
+            raise SystemExit("this method needs a VLM: pass --vlm-url (port 8000 belongs to another user)")
+        servers = healthy_servers(args.vlm_url)
+        if not servers:
+            raise SystemExit(f"no healthy VLM server among {args.vlm_url}")
+        v = cfg["vlm"]
+        client = VLMClient(servers, v["model"], max_tokens=v["max_tokens"], timeout_s=v["timeout_s"], cache=cache)
+    return EvalEnv(cfg, adapter, detector, client, out_dir, [args.method])
+
+
+def run_confirm(args) -> None:
+    """Replay the worst violating trials of an earlier campaign run with --method (the full system with the VLM)."""
+    src = args.out_root / f"nuscenes_{args.from_tag}" / "trials.jsonl"
+    rows = [json.loads(line) for line in src.read_text().splitlines() if line.strip()]
+    picked = select_worst(rows, args.confirm)
+    env = make_env(args, args.out)
+
+    def replay(row):
+        tdir = args.out / f"{row['campaign']}_trial_{row['trial']:04d}"
+        res = evaluate_trial(env, row["scene"], row["fault"], row["params"], args.method, row["spec"], tdir)
+        return {**{k: row[k] for k in ("campaign", "fault", "spec", "trial", "scene", "params")},
+                "falsified_robustness": row["robustness"], "method": args.method,
+                "robustness": res.robustness if math.isfinite(res.robustness) else None, "satisfied": res.satisfied,
+                "run_dir": res.run_dir}
+
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+        out = list(pool.map(replay, picked))
+    (args.out / "confirm.jsonl").write_text("".join(json.dumps(r) + "\n" for r in out))
+    intro = (f"The {args.confirm} worst violating trials per (fault, requirement) of `nuscenes_{args.from_tag}`, "
+             f"replayed with {args.method}.")
+    md = [f"# Confirmation with {args.method} ({args.tag})", "", intro, "",
+          "| fault | spec | replayed | still violated |", "|---|---|---|---|"]
+    keys = sorted({(r["fault"], r["spec"]) for r in out})
+    for f, s_ in keys:
+        rs = [r for r in out if (r["fault"], r["spec"]) == (f, s_)]
+        md.append(f"| {f} | {s_} | {len(rs)} | {sum(not r['satisfied'] for r in rs)} |")
+    md += ["", f"git: {git_state(REPO)}"]
+    (args.out / "summary.md").write_text("\n".join(md) + "\n")
+    print("\n".join(md))
 
 
 def run_campaign(args, fault_id: str, spec_name: str, sampler: str, scenes: list[str]) -> list[dict]:
@@ -138,7 +180,20 @@ def main() -> None:
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--tag", required=True)
     p.add_argument("--out-root", type=Path, default=Path("outputs/falsify"))
+    p.add_argument("--confirm", type=int, default=0, help="replay the K worst trials of --from-tag with --method")
+    p.add_argument("--from-tag", default=None)
+    p.add_argument("--vlm-url", nargs="*", default=None, help="VLM servers for methods that need one")
     args = p.parse_args()
+
+    if args.confirm:
+        if not args.from_tag:
+            raise SystemExit("--confirm needs --from-tag")
+        args.out = args.out_root / f"nuscenes_{args.tag}"
+        args.out.mkdir(parents=True, exist_ok=True)
+        (args.out / "meta.json").write_text(json.dumps({"args": {k: str(v) for k, v in vars(args).items()},
+                                                        "git": git_state(REPO)}, indent=2))
+        run_confirm(args)
+        return
 
     splits = yaml.safe_load((REPO / "configs" / "splits.yaml").read_text())
     scenes = args.scenes or splits["dev"]

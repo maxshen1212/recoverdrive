@@ -150,6 +150,24 @@ def evaluate_trial(env: EvalEnv, scene: str, fault_id: str, p: dict, method: str
     return TrialResult(res.robustness, res.satisfied, res.n_violations, p, str(out_dir))
 
 
+def select_worst(rows: list[dict], k: int) -> list[dict]:
+    """Per (fault, requirement): the k violating trials with the lowest robustness, without repeating a parameter set
+    (both samplers can find the same one). These are replayed with the full system (VLM)."""
+    by: dict[tuple, list[dict]] = {}
+    for r in rows:
+        if not r["satisfied"]:
+            by.setdefault((r["fault"], r["spec"]), []).append(r)
+    out = []
+    for key in sorted(by):
+        seen = set()
+        for r in sorted(by[key], key=lambda r: r["robustness"]):
+            sig = json.dumps([r["scene"], r["params"]], sort_keys=True)
+            if sig not in seen and len(seen) < k:
+                seen.add(sig)
+                out.append(r)
+    return out
+
+
 ROBUSTNESS_CAP = 10.0  # a trial with no obligation scores +inf; the optimizer gets this finite value instead
 
 

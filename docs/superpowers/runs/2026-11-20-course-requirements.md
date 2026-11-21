@@ -6,8 +6,8 @@
   GPU longer than 30 minutes is part of the goal, not a blocker.
 
 ## Status
-Current: B2 - confirm mode (CPU). GPU watcher running (`wait_gpu.sh`: a card with >= 8 GB free and <= 50% load
-for 5 minutes). Next: the GPU runs B3-B6 when the watcher fires.
+Current: waiting for a GPU (all code for Phase B is written and tested). GPU watcher running (`wait_gpu.sh`: a card
+with >= 8 GB free and <= 50% load for 5 minutes). Next: B3 (C2/C3 campaigns) when the watcher fires, then B4-B6.
 
 Tasks:
 - B1 (Task 8 code): `Scenario` for CARLA (defaults reproduce E3), per-step `gap_m` and `collision`, `falsify_carla.py`.
@@ -22,7 +22,8 @@ Tasks:
 | Task | Commit | Verification | Notes |
 |---|---|---|---|
 | Phase A | de57395 | 162 passed, ruff clean; replay 4830/4830 | specs, proofs, CPU falsification, triage, figure (see the ledger) |
-| B1 | (this commit) | 167 passed, ruff clean; run_e3 imports | `Scenario` (defaults = E3, tests), run_e3 `scenario=`, per-step `gap_m`/`collision`, `falsify_carla.py`; CARLA regression cell runs in B5 |
+| B1 | 2c086f3 | 167 passed, ruff clean; run_e3 imports | `Scenario` (defaults = E3, tests), run_e3 `scenario=`, per-step `gap_m`/`collision`, `falsify_carla.py`; CARLA regression cell runs in B5 |
+| B2 | (this commit) | 168 passed, ruff clean; dry run exits at the VLM check | `select_worst` (test), `--confirm K --from-tag --vlm-url` replays the worst trials with Ours-full |
 
 ## Deferred questions
 - D1 (B1): CARLA falsification objective. Chose: the robustness of R5 (TTC braking and gap ≥ 0), which mixes action

@@ -105,6 +105,23 @@ def test_campaign_budget_and_seed():
     assert near["tpe"] > near["random"]
 
 
+def test_select_worst_per_campaign():
+    from recoverdrive.falsify import select_worst
+
+    def row(fault, spec_name, rho, scene="a", start=1):
+        return {"fault": fault, "spec": spec_name, "robustness": rho, "satisfied": rho >= 0, "scene": scene,
+                "params": {"start": start}}
+
+    rows = [row("C1", "R1", -0.5, start=1), row("C1", "R1", -0.5, start=1),  # same trial found twice
+            row("C1", "R1", -1.5, start=2), row("C1", "R1", 0.5, start=3), row("C1", "R1", -0.5, start=4),
+            row("L2", "R6", -0.5)]
+    out = select_worst(rows, 2)
+    c1 = [r for r in out if r["fault"] == "C1"]
+    assert [r["robustness"] for r in c1] == [-1.5, -0.5] and len({json.dumps(r["params"]) for r in c1}) == 2
+    assert len([r for r in out if r["fault"] == "L2"]) == 1
+    assert all(not r["satisfied"] for r in out)
+
+
 def test_cached_detector_cache_only_raises_on_miss():
     cache = DictCache()
     det = CachedDetector(cache, ["car"], allow_miss=False)
