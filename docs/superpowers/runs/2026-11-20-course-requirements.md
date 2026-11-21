@@ -37,6 +37,10 @@ Tasks:
   machine, rebuilding the environments there, and about 21 GB of model weights (Qwen3-VL-8B and the gated SAM 3),
   either copied from this server or downloaded with a Hugging Face login. No GPU job is running; all code is
   committed (`619343b`, plus this log).
+- 2026-11-21 00:25 (B3): BLOCKED, severe (core assumption). gvl2's NVIDIA driver is 565.57.01 (CUDA 12.x at most),
+  but the environments pin CUDA 13 builds (`torch==2.14.1` cu130 in the main env, vLLM 0.32 in `serving/`), which
+  need driver >= 580. The stack cannot use gvl2's GPUs as it is. Options: upgrade the driver (lab admin), build a
+  CUDA 12 environment for gvl2 (new pins, recorded in provenance), or wait for the old server's GPUs.
 
 ## Waiting log
 - 2026-11-20 16:44–22:45: watcher 1 timed out after 6 h; no card ever had >= 8 GB free with <= 50% load (all 4 at
