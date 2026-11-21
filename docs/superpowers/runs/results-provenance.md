@@ -43,6 +43,19 @@ Every run below records its commit and `dirty: false` in its own `meta.json` / o
 | Bootstrap intervals | `report_figures/bootstrap.{md,json}` (repo root, not tracked) | `3483460` | Recorded in the JSON. |
 | Step 1 tables S1–S5 | `report_figures/tables.md`, key `step1` of `summary.json` | branch head | `scripts/make_figures.py`; old keys unchanged. |
 
+### Course requirements, Phase A (2026-11-20, branch `worktree-course-requirements`)
+
+Specs, proofs and CPU-only falsification (plan `docs/superpowers/plans/2026-11-20-course-requirements.md`). Each output
+records its commit in its JSON or `meta.json`.
+
+| Result | Path | Commit | Source |
+|---|---|---|---|
+| R1–R6 on the logged runs (test split, E3) and Clopper–Pearson bounds | `report_figures/requirements.{md,json}` (repo root, not tracked) | `38707da` | Recorded. Reads `eval/test_final`, `eval/test_checks_only`, `e3/e3_final`. |
+| Shield and controller verification (S1–S7, C1–C6) | `report_figures/formal.{md,json}` | `3c3f707` | Recorded. |
+| nuScenes falsification, CPU faults (C1, C4, L1, L2, L4; 2,400 trials, checks-only, dev) | `falsify/nuscenes_cpu_v1/` | `fbd56ff` | Recorded (`meta.json`, `summary.md`). |
+| Falsification triage | `falsify/nuscenes_cpu_v1/triage.{md,json}` | `20ebeb8` | Recorded. |
+| Assurance case figure | `docs/media/assurance_case.png` (tracked) | `20ebeb8` | `scripts/make_assurance_figure.py` from the files above. |
+
 Later commits (`528b367..14d3024`) changed only documentation, comments, the model download script, the CARLA
 launcher, and demo recording in `run_e3.py`. No change affects any number above.
 
