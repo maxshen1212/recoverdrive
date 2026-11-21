@@ -7,8 +7,7 @@
 - Continues `docs/superpowers/runs/2026-11-20-course-requirements.md` (Phase B tasks B3–B7).
 
 ## Status
-Current: round 2. T10 done; T13 done (agent faults). Running: T11 screen (`vlm_screen_s0_round2`), T12 seeds 1–2
-(`vlm_trust_s12`, `vlm_imgflag_s12`), T14 CARLA replays (`carla_v2_imgflag_r4`, `_r4_ped`; `_r5` done). Next: T15.
+Current: round 2. T10 done; T13 done (agent faults). T11, T14 done. Running: T12 seeds 1–2 (`vlm_trust_s12`, `vlm_imgflag_s12`). Next: T15.
 
 Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs/falsify/`):
 - B3 done: `nuscenes_gpu_v1`, C2/C3 × R1/R2/R3/R6 × random/TPE, 960 trials (checks_only).
@@ -29,6 +28,7 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 | T1 | (this commit) | CARLA confirmation: 10 replays with Ours-full, exit 0; the collision scenario also collides with Ours-full | B5 complete |
 | T13 | (this commit) | `vlm_agent_s0`: 729 frames, 0 errors; 181 passed, ruff clean | recovery 0.661 Ours-full, 0.622 `think_trust`, 0.661 `imgflag`; unnecessary fallback 0.056 / 0.089 / 0.154 |
 | T11 | (this commit) | `vlm_screen_s0_round2`: 42 runs, 1,701 frames, 0 errors; bootstrap vs Ours-full | `perceive_trust` F1 0.617 (gap +0.109 [+0.070, +0.149]); `imgflag` 0.726 (−0.001 [−0.028, +0.025]) with false alarm 0.246 vs 0.089; `imgflag_checks` 0.723 at 1 call/frame |
+| T14 | (this commit) | `carla_v2_imgflag_{r4,r4_ped,r5}`: 12 replays, all finished (the cut-off duplicate of the main R4 process is kept as `pedestrian_confirm.partial-20261121T0805`) | front camera isolated 0/153 fault steps; rear camera isolated on 65/308 clean steps ("frozen"); R4 3/10 coincidental fixes, 1 new violation; collision unchanged |
 
 ## Drive
 - Report Doc `1TejQjwoDeW_gQMlVCWMl-G1R87ICXqNJk1hCnP4fHA8`, updated in place (title unchanged).

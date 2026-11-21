@@ -186,3 +186,26 @@ flag). It fixes none of the 70 unnecessary fallbacks, because it raises false al
 were selected to break the checks, so any method whose errors are independent of the checks avoids many of them by
 construction; the screening table above, on all frames, is the fair comparison. Together they suggest a monitor in
 which the VLM's own judgment of image quality adds evidence that the checks lack, without a veto over them.
+
+### CARLA replays with the VLM image flag (round 2)
+
+Every closed-loop violation of the CARLA falsification came from a rotated front camera that the checks missed
+(`docs/superpowers/runs/2026-11-20-falsification.md`). We replayed the 5 lowest-R4 scenarios per hazard and the
+lowest-R5 scenario per hazard (12 scenarios, front camera rotated by 5.2°–11.3°) with `imgflag_checks_full`, the
+checks-only rules plus the VLM image flag (`outputs/falsify/carla_v2_imgflag_{r4,r4_ped,r5}/`; table in
+`report_figures/results_2026-11-21.md`).
+
+| | checks-only (source runs) | image flag → checks-only |
+|---|---|---|
+| Front camera isolated during the fault | 0 of the fault steps | 0 / 153 fault steps |
+| Clean steps with a sensor isolated | 1 | 65 / 308 (the rear camera, mostly "frozen") |
+| R4 violated, the 10 lowest-R4 scenarios | 10 / 10 | 7 / 10 |
+| R4 violated, the 2 lowest-R5 scenarios | 0 / 2 | 1 / 2 |
+| Collisions | 1 / 12 | 1 / 12 (the same pedestrian scenario) |
+
+The VLM never marked the rotated front camera. It marked the rear camera abnormal on 65 clean steps; its cached
+answers say "frozen (identical to previous frame while scene moves)": a rear view changes little within 0.5 s,
+especially when the car starts or slows. The three R4 "fixes" are coincidences: in each, a slow-down for a false
+rear-camera alarm happened at the start of the front fault (speed ≤ 3.06 m/s), while the front camera stayed in use. In
+the lead-car scenario where R4 newly fails, an earlier false-alarm slow-down left the car farther behind the lead car,
+so the time-to-collision brake that had satisfied R4 for checks-only no longer fired within 3 s of the fault.

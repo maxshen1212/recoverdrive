@@ -30,11 +30,13 @@ bug: see [docs/requirements-and-verification.md](docs/requirements-and-verificat
 experiment are listed in [docs/experiments.md](docs/experiments.md), and the data flow in
 [docs/media/dataflow.png](docs/media/dataflow.png).
 
-**Letting the VLM reason more.** Six VLM-centric variants of the diagnosis agent (reasoning first, a first pass that
-describes the raw sensor data, per-sensor notes at higher resolution, each with or without the check report) were
-screened on the dev split. None beats the frozen monitor. When told that the checks can be wrong, the VLM explains
-correct flags away (F1 0.40–0.61 against 0.73); with the frozen guidance, reasoning first gives the same F1 with fewer
-missed and more unnecessary fallbacks. The VLM's own view helps only on image-quality faults (C2, C3): see
+**Letting the VLM reason more.** Nine VLM-centric variants of the diagnosis agent were screened on the dev split in
+two rounds: reasoning first, a first pass that describes the raw sensor data, per-sensor notes at higher resolution
+(each with or without the check report), and the VLM as an image-quality flag added to the checks. None beats the
+frozen monitor. When told that the checks can be wrong, or given its own first-look notes, the VLM explains correct
+flags away (F1 0.40–0.62 against 0.73); with the frozen guidance, reasoning first gives the same F1 with fewer missed
+and more unnecessary fallbacks. As an image-quality flag it catches 87% of strongly degraded images but almost no
+rotated camera, and it calls 43% of clean night frames abnormal: same F1, three times the false alarms. See
 [docs/vlm-variants.md](docs/vlm-variants.md).
 
 ## Demo
