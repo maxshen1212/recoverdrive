@@ -29,6 +29,11 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 | T2b | (this commit) | CARLA triage: 29 R4 + 1 R5 violation (1 collision), all undetected C2 rotations; 0 bug candidates | falsification log, CARLA section |
 | T1 | (this commit) | CARLA confirmation: 10 replays with Ours-full, exit 0; the collision scenario also collides with Ours-full | B5 complete |
 
+## Drive
+- Folder `experiment_result/report_figures_2026-11-21` (`1BBO-rIVZXMCK_T9hkz1oK9UplcJ6PGsM`).
+- Demo video `recoverdrive_demo_c1_pedestrian.mp4` (`16TnNjXg6KOq0jPG1VVI-2WtfMhUDf2w7`, 7,020,097 bytes), made by
+  `scripts/make_demo_video.py` from the recorded E3 demo runs.
+
 ## Deferred questions
 - D3 (T3): variant prompts are written once, not tuned (one smoke check for format errors only).
 - D4 (T5): the 2 variants with the best pooled `_full` F1 on dev seed 0 (fallback errors within 0.02 of Ours-full)
