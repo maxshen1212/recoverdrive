@@ -7,9 +7,8 @@
 - Continues `docs/superpowers/runs/2026-11-20-course-requirements.md` (Phase B tasks B3–B7).
 
 ## Status
-Current: T4 screening restarted at 04:19 on both vLLM servers (GPU 4 port 8002, GPU 7 port 8001; finished
-frames replay from the cache); `think_trust` (D7) runs in parallel as `vlm_screen_s0_trust`. T1 done. Next: replay of
-the counterexamples with the best variant (T5), then figures and report.
+Current: T1–T7 done; GPU work finished, vLLM servers stopped (GPUs 4 and 7 back to 2 MiB). Next: T8 Doc phase 2
+(variants section, Figures 9–11), Drive zip and provenance Doc, then T9 merge and push.
 
 Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs/falsify/`):
 - B3 done: `nuscenes_gpu_v1`, C2/C3 × R1/R2/R3/R6 × random/TPE, 960 trials (checks_only).
@@ -34,6 +33,9 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 - Demo video `recoverdrive_demo_c1_pedestrian.mp4` (`16TnNjXg6KOq0jPG1VVI-2WtfMhUDf2w7`, 7,020,097 bytes), made by
   `scripts/make_demo_video.py` from the recorded E3 demo runs.
 | T8a | (this commit) | Doc phase 1 applied in 4 guarded batches, 0 errors; read back: Formal Requirements (§3), Figure 2 data flow (§5), experiment table (§6 Setup), Verification and Falsification with 2 tables and Figure 8, 7. Assurance Case with Figure 12, captions renumbered (3–7, 11), 8. Conclusion; PDF export 21 pages checked | images from GitHub raw URLs at `cceadb6` (branch pushed) |
+| T4 | (this commit) | `vlm_screen_s0`: 42 runs, 1,701 frames, 0 frame errors; `vlm_screen_s0_trust`: 42 runs, 1,701 frames, 0 frame errors | every variant told the checks can be wrong has lower F1 (bootstrap intervals exclude 0); `think_trust` ties Ours-full (F1 0.732 vs 0.726, diff −0.007 [−0.026, 0.012]) |
+| T5 | (this commit) | replays exit 0 (4 runs, 214 trials each method): still violated Ours-full 212, think_trust 179, think_nochecks 105 | seeds 1–2 skipped under D7 (no variant beats Ours-full) |
+| T6/T7 | (this commit) | figures fig6–fig10 + `docs/media/{falsification,vlm_variants,vlm_variants_per_fault,vlm_replays}.png`; `docs/vlm-variants.md`, README, FutureWork, provenance | all numbers from `report_figures/results_2026-11-21.json` |
 
 ## Deferred questions
 - D3 (T3): variant prompts are written once, not tuned (one smoke check for format errors only).

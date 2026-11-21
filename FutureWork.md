@@ -41,6 +41,14 @@ explainer, or find faults the checks cannot see where the VLM helps (subtle imag
 adverse weather), which Step 3's new data would have to show. Step 2's text-chain baselines with the check numbers
 will likely land near checks-only for the same reason.
 
+**Update (2026-11-21): letting the VLM reason more did not help on sensor faults.** Six VLM-centric variants were
+screened on the dev split (`docs/vlm-variants.md`). When the prompt says the checks can be wrong, the VLM explains
+correct flags away and F1 drops by 0.11–0.32; with the frozen guidance, reasoning first gives the same F1 with fewer
+missed and more unnecessary fallbacks. The VLM's own view beats the checks only on image-quality faults (C2, C3),
+which are also the faults the falsification found hardest (every closed-loop violation was a rotated front camera
+the checks missed). So the second option above, faults the checks cannot see, is where the VLM can add value; a next
+step is to keep the checks in charge and ask the VLM only about image quality, as one more flag.
+
 Cheap and mostly offline: these reuse the logs of the existing runs.
 
 | Item | What to do | Question it answers |

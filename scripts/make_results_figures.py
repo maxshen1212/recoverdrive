@@ -196,26 +196,34 @@ def fig6_falsification(nus: list[dict], carla: list[dict]) -> None:
     plt.close(fig)
 
 
-def fig7_replays(rows: list[dict]) -> None:
-    by_method: dict[str, list[int]] = {}
-    for r in rows:
-        acc = by_method.setdefault(r["method"], [0, 0])
-        acc[0] += r["replayed"]
-        acc[1] += r["still_violated"]
-    methods = list(by_method)
-    fig, ax = plt.subplots(figsize=(7.5, 0.6 + 0.55 * len(methods)))
-    y = np.arange(len(methods))
-    share = [by_method[m][1] / by_method[m][0] for m in methods]
-    bars = ax.barh(y, share, 0.55, color=[SLOTS[0] if m == "ours_full" else SLOTS[1] for m in methods])
-    ax.set_xlim(0, 1.25)
-    for bb, m in zip(bars, methods):
-        n, v = by_method[m]
-        ax.text(bb.get_width() + 0.015, bb.get_y() + bb.get_height() / 2, f"{v} of {n} still violated", va="center",
-                fontsize=8.5)
-    ax.set_yticks(y, [NAMES.get(m, m) for m in methods])
-    ax.invert_yaxis()
-    ax.set_xlabel("share of the checks' worst counterexamples that the VLM method still violates")
-    ax.set_title("Replaying the counterexamples of the deterministic checks with a VLM", fontsize=10.5, loc="left")
+def fig7_replays(tags: list[str]) -> None:
+    """Share of the checks' worst counterexamples a VLM method still violates, per requirement."""
+    data: dict[str, dict[str, list[int]]] = {}
+    for tag in tags:
+        for r in read_jsonl(Path("outputs/falsify") / f"nuscenes_{tag}" / "confirm.jsonl"):
+            acc = data.setdefault(r["method"], {}).setdefault(r["spec"], [0, 0])
+            acc[0] += 1
+            acc[1] += not r["satisfied"]
+    methods = list(data)
+    specs = sorted({s for d in data.values() for s in d})
+    fig, ax = plt.subplots(figsize=(8.5, 3.6))
+    x = np.arange(len(specs))
+    w = 0.8 / len(methods)
+    for i, m in enumerate(methods):
+        vals = [data[m][s][1] / data[m][s][0] for s in specs]
+        bars = ax.bar(x + (i - (len(methods) - 1) / 2) * w, vals, w - 0.03, color=SLOTS[i], label=NAMES.get(m, m))
+        for b, s in zip(bars, specs):
+            n, v = data[m][s]
+            ax.text(b.get_x() + b.get_width() / 2, b.get_height() + 0.02, f"{v}/{n}", ha="center", va="bottom",
+                    fontsize=8)
+    ax.set_xticks(x, [{"R1": "R1 missed", "R2": "R2 unnecessary", "R3": "R3 recovery", "R6": "R6 early restore"}
+                      .get(s, s) for s in specs])
+    ax.set_ylim(0, 1.25)
+    ax.set_ylabel("share still violated")
+    ax.grid(axis="y", color=GRID, lw=0.8)
+    ax.set_axisbelow(True)
+    ax.legend(frameon=False, loc="upper center", ncol=len(methods), bbox_to_anchor=(0.5, 1.02))
+    ax.set_title("The checks' worst counterexamples (214) replayed with VLM methods", fontsize=10.5, loc="left", pad=24)
     fig.tight_layout()
     fig.savefig(OUT / "fig7_replays.png", dpi=160)
     plt.close(fig)
@@ -337,10 +345,11 @@ def main() -> None:
     md += [f"| {r['hazard']} | {r['sampler']} | {r['runs']} | {r['collisions']} | {r['R5_violations']} | "
            f"{r['R4_violations']} | {r['min_R5']} |" for r in carla]
 
-    rep = replays(["confirm_cpu_v1", "confirm_gpu_v1", *args.confirm_variant])
+    rep_tags = ["confirm_cpu_v1", "confirm_gpu_v1", *args.confirm_variant]
+    rep = replays(rep_tags)
     summary["replays"] = rep
     if rep:
-        fig7_replays(rep)
+        fig7_replays(rep_tags)
         md += ["", "## Counterexamples of the checks replayed with a VLM method", "",
                "| source | method | replayed | still violated |", "|---|---|---|---|"]
         md += [f"| {r['tag']} | {r['method']} | {r['replayed']} | {r['still_violated']} |" for r in rep]

@@ -21,6 +21,22 @@ detector and only 4 test scenes.
 **The plan to address them and turn this into a paper is in [FutureWork.md](FutureWork.md).** Related work is
 surveyed in [docs/related-work.md](docs/related-work.md).
 
+**Requirements, proofs and falsification.** Six requirements (R1–R6) are written in Signal Temporal Logic and checked
+on every logged run; the shield and the recovery controller are proven correct by exhaustive checking. Guided
+falsification (Optuna TPE) finds about three times as many requirement-violating fault settings as random injection
+(614 against 200 of 1,680 trials each), and in CARLA it found a collision caused by a 7° front-camera rotation that
+the checks miss. Every violation traces to the detection limit of the checks or a stated assumption, not to a logic
+bug: see [docs/requirements-and-verification.md](docs/requirements-and-verification.md). The variables of every
+experiment are listed in [docs/experiments.md](docs/experiments.md), and the data flow in
+[docs/media/dataflow.png](docs/media/dataflow.png).
+
+**Letting the VLM reason more.** Six VLM-centric variants of the diagnosis agent (reasoning first, a first pass that
+describes the raw sensor data, per-sensor notes at higher resolution, each with or without the check report) were
+screened on the dev split. None beats the frozen monitor. When told that the checks can be wrong, the VLM explains
+correct flags away (F1 0.40–0.61 against 0.73); with the frozen guidance, reasoning first gives the same F1 with fewer
+missed and more unnecessary fallbacks. The VLM's own view helps only on image-quality faults (C2, C3): see
+[docs/vlm-variants.md](docs/vlm-variants.md).
+
 ## Demo
 
 CARLA, same route and seed. While a pedestrian crosses, the front camera shows the rear view (fault C1); the inset
@@ -68,6 +84,9 @@ serving/            separate uv project that only holds vLLM
 tests/              unit tests (pytest)
 docs/media/         demo GIFs and the architecture diagram
 docs/related-work.md  related-work survey (2025–2026)
+docs/experiments.md   variables of every experiment (changed, fixed, measured)
+docs/vlm-variants.md  VLM-centric variants of the diagnosis agent and their results
+docs/requirements-and-verification.md  STL requirements, proofs, falsification, assurance case
 docs/superpowers/   design spec (in Traditional Chinese), plans, run logs, results provenance
 FutureWork.md       next steps toward a paper
 ```
