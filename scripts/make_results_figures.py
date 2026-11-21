@@ -63,6 +63,24 @@ def merge_tags(recs: list[dict], extra: list[dict]) -> list[dict]:
     return out
 
 
+def union_tags(tags: list[str]) -> tuple[list[dict], list[str], list[int]]:
+    """Records of several runs: frames with the same (scene, fault, seed, frame) get their method outputs merged."""
+    by: dict[tuple, dict] = {}
+    faults, seeds = [], []
+    for tag in tags:
+        recs, a = load_eval(tag)
+        faults += [f for f in a["faults"] if f not in faults]
+        seeds += [s for s in a["seeds"] if s not in seeds]
+        for r in recs:
+            k = (r["scene"], r["run_fault"], r["seed"], r["frame_idx"])
+            if k in by:
+                assert by[k]["label"] == r["label"], "frames differ between the merged runs"
+                by[k] = {**by[k], "methods": {**by[k]["methods"], **r["methods"]}}
+            else:
+                by[k] = r
+    return list(by.values()), faults, sorted(seeds)
+
+
 def load_eval(tag: str) -> tuple[list[dict], dict]:
     meta = json.loads((Path("outputs/eval") / tag / "meta.json").read_text())
     a = meta["args"]
@@ -270,7 +288,7 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--screen", default="vlm_screen_s0", help="dev screening tag (seed 0)")
     p.add_argument("--screen-extra", nargs="*", default=[], help="more tags over the same frames (e.g. think_trust)")
-    p.add_argument("--seeds", default=None, help="tag with the 3-seed runs of the best variants, if done")
+    p.add_argument("--seeds", nargs="*", default=[], help="tags whose union holds 3 seeds of the best variants")
     p.add_argument("--confirm-variant", nargs="*", default=[], help="nuScenes confirm tags of a variant")
     args = p.parse_args()
     OUT.mkdir(exist_ok=True)
@@ -327,16 +345,18 @@ def main() -> None:
                 cells.append("—" if b["point"] is None else f"{b['point']:+.3f} [{b['lo']:+.3f}, {b['hi']:+.3f}]")
             other = name.split(" - ", 1)[1]
             md.append(f"| Ours-full − {NAMES.get(other, other)} | " + " | ".join(cells) + " |")
-    if args.seeds and (Path("outputs/eval") / args.seeds / "meta.json").exists():
-        recs, a = load_eval(args.seeds)
-        methods = [m for m in (*REFERENCE, *VARIANTS) if any(m in r["methods"] for r in recs[:50])]
-        rows = method_rows(recs, methods, a["faults"], a["seeds"])
-        summary["seeds"] = {"tag": args.seeds, "faults": a["faults"], "seeds": a["seeds"], "frames": len(recs),
-                            "rows": rows}
-        fig8_variants(rows, f"Best variants on the dev split, mean ± std over seeds {a['seeds']} (faults "
-                            f"{' '.join(a['faults'])})", "fig8_vlm_variants_seeds.png")
-        md += ["", f"## Best variants, seeds {a['seeds']} ({args.seeds}: {len(recs)} frames)", "",
-               md_method_table(rows)]
+    if args.seeds:
+        recs, faults, seeds = union_tags(args.seeds)
+        methods = [m for m in (*REFERENCE, *VARIANTS)
+                   if all(any(m in r["methods"] for r in recs if r["seed"] == s) for s in seeds)]
+        recs = [r for r in recs if all(m in r["methods"] for m in methods)]
+        rows = method_rows(recs, methods, faults, seeds)
+        boot = bootstrap_metrics(recs, [m for m in methods if m != "B0"], "ours_full")
+        summary["seeds"] = {"tags": args.seeds, "faults": faults, "seeds": seeds, "frames": len(recs), "rows": rows,
+                            "bootstrap": boot}
+        fig8_variants(rows, f"Dev split, mean ± std over seeds {seeds} (faults {' '.join(faults)}; {len(recs)} frames)",
+                      "fig8_vlm_variants_seeds.png")
+        md += ["", f"## Seeds {seeds} ({', '.join(args.seeds)}: {len(recs)} frames)", "", md_method_table(rows)]
     (OUT / "results_2026-11-21.md").write_text("\n".join(md) + "\n")
     (OUT / "results_2026-11-21.json").write_text(json.dumps(summary, indent=1, default=float))
     print("\n".join(md))
