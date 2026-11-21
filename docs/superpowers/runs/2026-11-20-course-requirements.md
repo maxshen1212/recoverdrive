@@ -1,0 +1,34 @@
+# Run: course requirements, Phase B (GPU experiments)
+- Plan: docs/superpowers/plans/2026-11-20-course-requirements.md (Phase A ledger: `.superpowers/sdd/2026-11-20-course-requirements/progress.md`)
+- Goal condition: "please keep monitoring the GPUs and run the experiment once some GPUs are available."
+- Started: 2026-11-20 16:40
+- pre-authorized: "keep monitoring the GPUs and run the experiment once some GPUs are available" — waiting for a free
+  GPU longer than 30 minutes is part of the goal, not a blocker.
+
+## Status
+Current: B2 - confirm mode (CPU). GPU watcher running (`wait_gpu.sh`: a card with >= 8 GB free and <= 50% load
+for 5 minutes). Next: the GPU runs B3-B6 when the watcher fires.
+
+Tasks:
+- B1 (Task 8 code): `Scenario` for CARLA (defaults reproduce E3), per-step `gap_m` and `collision`, `falsify_carla.py`.
+- B2 (Task 7c code): `--confirm K` mode of `falsify_nuscenes.py` (replay the worst trials with Ours-full).
+- B3 (Task 7b run): C2/C3 campaigns with SAM 3 on a GPU.
+- B4 (Task 7c run): Ours-full confirmation (vLLM 8B).
+- B5 (Task 8 run): CARLA regression cell, then CARLA falsification.
+- B6 (Task 9): triage of the GPU campaigns; repairs only for real bugs.
+- B7 (Task 11): final numbers into `docs/requirements-and-verification.md` and the assurance figure.
+
+## Checkpoints
+| Task | Commit | Verification | Notes |
+|---|---|---|---|
+| Phase A | de57395 | 162 passed, ruff clean; replay 4830/4830 | specs, proofs, CPU falsification, triage, figure (see the ledger) |
+| B1 | (this commit) | 167 passed, ruff clean; run_e3 imports | `Scenario` (defaults = E3, tests), run_e3 `scenario=`, per-step `gap_m`/`collision`, `falsify_carla.py`; CARLA regression cell runs in B5 |
+
+## Deferred questions
+- D1 (B1): CARLA falsification objective. Chose: the robustness of R5 (TTC braking and gap ≥ 0), which mixes action
+  ranks and meters in one minimum. If you prefer otherwise: separate campaigns per R4 and R5 (twice the CARLA time).
+- D2 (B7): the Google Doc. Chose: keep the report text in `docs/requirements-and-verification.md` until Phase B ends,
+  then insert it in place. If you prefer otherwise: insert the Phase A text now and update it later.
+
+## Blockers
+(none)

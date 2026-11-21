@@ -32,20 +32,23 @@ from recoverdrive.adapters.carla_adapter import (
 from recoverdrive.cache import KVCache
 from recoverdrive.checks import CheckConfig, CheckThresholds, _project, match_boxes, run_checks
 from recoverdrive.detectors.sam3 import CachedDetector
-from recoverdrive.faults import inject_c1
 from recoverdrive.geometry import to_sensor_frame
 from recoverdrive.methods import FrameContext, build_methods
 from recoverdrive.metrics import markdown_table
 from recoverdrive.recording import JsonlWriter
 from recoverdrive.render import camera_mosaic, lidar_bev
 from recoverdrive.runner import frame_seed, git_state, points_in_ego, sensors_of
+from recoverdrive.scenario import Scenario
 from recoverdrive.shield import acceptable_actions, ttc_override
-from recoverdrive.types import Action, FaultLabel, Pose
+from recoverdrive.types import Action, Pose
 from recoverdrive.vlm import VLMClient, healthy_servers, image_part, summarize_checks
 
 IDENTITY = Pose(np.array([1.0, 0, 0, 0]), np.zeros(3))
 REPO = Path(__file__).resolve().parent.parent
 TM_PORT = 8100  # the TM default (8000) is taken by vLLM; --tm-port changes it per process
+# Distance between the ego's and the hazard actor's centers at which their boxes touch (about half the ego's length
+# plus half the lead car's length, or plus the walker's radius); gap_m below 0 means contact.
+GAP_OFFSET_M = {"lead_brake": 4.7, "pedestrian": 2.6}
 
 
 def find_routes(cmap, n: int, length: float) -> list:
@@ -229,12 +232,16 @@ def camera_confirmed(frame, all_boxes, dets, cfg: CheckConfig):
 
 
 def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, method_name, seed, detector, vlm,
-              out_dir: Path) -> dict:
+              out_dir: Path, scenario: Scenario | None = None) -> dict:
+    """One closed-loop run. `scenario` (falsification) overrides the hazard timing and the fault; without it the run
+    is the E3 run of `condition`."""
     name = f"r{route_idx}_{hazard}_{condition}_{method_name}_s{seed}"
     done = out_dir / f"{name}.json"
     if done.exists():
         return json.loads(done.read_text())
+    sc = scenario or Scenario.from_condition(hazard, condition)
     rng = np.random.default_rng([seed, route_idx])
+    fault_rng = np.random.default_rng([seed, route_idx, 7])  # only C3/L1 scenario faults draw from it
     clear_world(world)
     bp = world.get_blueprint_library()
     tm = client.get_trafficmanager(TM_PORT)
@@ -249,7 +256,7 @@ def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, 
     start = np.array([route_tf.location.x, route_tf.location.y])
     heading = np.array([np.cos(np.radians(route_tf.rotation.yaw)), np.sin(np.radians(route_tf.rotation.yaw))])
     wp0 = cmap.get_waypoint(route_tf.location)
-    trigger_m = 40.0 + float(rng.uniform(-3, 3))
+    trigger_m = sc.trigger_m(float(rng.uniform(-3, 3)))  # always draw, so the scenery below stays the same
     lead = walker = None
     if hazard == "lead_brake":
         tf = wp0.next(25.0)[0].transform
@@ -308,14 +315,14 @@ def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, 
             triggered_at = tick
         if hazard == "lead_brake" and triggered_at is not None:
             dt_h = (tick - triggered_at) * args.dt
-            if dt_h < 3.0:
+            if dt_h < sc.lead_brake_s:
                 lead.set_autopilot(False, TM_PORT)
                 lead.apply_control(carla.VehicleControl(throttle=0.0, brake=1.0))
-            elif dt_h < 3.0 + args.dt:
+            elif dt_h < sc.lead_brake_s + args.dt:
                 lead.set_autopilot(True, TM_PORT)
         if hazard == "pedestrian" and triggered_at is not None:
             dt_h = (tick - triggered_at) * args.dt
-            walker.apply_control(carla.WalkerControl(direction=cross_dir, speed=1.6 if dt_h < 6.0 else 0.0))
+            walker.apply_control(carla.WalkerControl(direction=cross_dir, speed=sc.walker_speed_mps if dt_h < 6.0 else 0.0))
         # perception + monitor at 2 Hz
         if tick % args.perception_every == 0:
             images = {c: bgra_to_rgb(data[c].raw_data, data[c].width, data[c].height) for c in cams}
@@ -324,12 +331,9 @@ def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, 
             frame = build_frame(name, steps, int(data["LIDAR"].timestamp * 1e6), np.array(ego.get_transform()
                                                                                           .get_matrix()),
                                 images, DEFAULT_CAMERAS, pts, boxes)
-            label = FaultLabel.none()
-            # C1 covers the hazard stretch of the route (25 m before to 30 m after the trigger point), whatever
-            # the ego's speed, so slowing down cannot move the fault away from the hazard.
-            if condition == "C1" and trigger_m - 25.0 <= progress <= trigger_m + 30.0:
-                frame = inject_c1(frame, "CAM_FRONT", "CAM_BACK")
-                label = FaultLabel("C1", "camera:CAM_FRONT", "high", 0)
+            # The fault covers a stretch of the route around the trigger point (E3: C1 from 25 m before to 30 m after),
+            # whatever the ego's speed, so slowing down cannot move the fault away from the hazard.
+            frame, label = sc.apply_fault(frame, progress, trigger_m, fault_rng)
             dets = {c: detector.detect(frame.cameras[c].image) for c in cams}
             check = run_checks(frame, prev_frame, prev_report, dets, check_cfg, thr, cams)
             summary = summarize_checks(check.report, check_cfg.max_range_m, check_cfg.iou_threshold,
@@ -350,7 +354,10 @@ def run_route(client, world, cfg, args, route_idx, route_tf, hazard, condition, 
             hud = {"fault": label.fault_id != "none", "state": out.recovery.final_state if out.recovery else "healthy",
                    "isolated": [s for s in isolated if s != "agent"], "action": action.action, "ttc_brake": ttc_brake}
             last_front = frame.cameras["CAM_FRONT"].image
+            hz = (lead or walker).get_location()
+            gap = float(np.hypot(hz.x - loc.x, hz.y - loc.y)) - GAP_OFFSET_M[hazard]
             writer.write({"step": steps, "tick": tick, "progress_m": round(progress, 2), "label": label,
+                          "gap_m": round(gap, 3), "collision": collided_tick is not None,
                           "monitor_action": out.action.action, "action": action.action, "reason": action.reason,
                           "ttc": ttc, "isolated": isolated, "state": out.recovery.final_state if out.recovery else None,
                           "acceptable": acceptable_actions(label), "speed_mps": float(np.linalg.norm([v.x, v.y])),
