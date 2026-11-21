@@ -168,6 +168,31 @@ def select_worst(rows: list[dict], k: int) -> list[dict]:
     return out
 
 
+def select_worst_carla(rows: list[dict], k: int) -> list[dict]:
+    """Per hazard: the k trials with the lowest R5 robustness (violations first, since they score below 0), one per
+    parameter set. Trials with no R5 obligation (robustness None) are skipped. These are replayed with Ours-full."""
+    by: dict[str, list[dict]] = {}
+    for r in rows:
+        if r.get("R5") is not None:
+            by.setdefault(r["hazard"], []).append(r)
+    out = []
+    for hazard in sorted(by):
+        seen = set()
+        for r in sorted(by[hazard], key=lambda r: r["R5"]):
+            sig = json.dumps(r["params"], sort_keys=True)
+            if sig not in seen and len(seen) < k:
+                seen.add(sig)
+                out.append(r)
+    return out
+
+
+def resume_mismatch(old_params: dict | None, params: dict) -> bool:
+    """True if an earlier run of the same campaign drew different parameters for this trial index. Resuming then
+    would mix two scenarios in one trial folder, so the caller stops instead. Samplers with a fixed seed repeat
+    their draws when they get the same results back, so a mismatch means the history changed."""
+    return old_params is not None and json.dumps(old_params, sort_keys=True) != json.dumps(params, sort_keys=True)
+
+
 ROBUSTNESS_CAP = 10.0  # a trial with no obligation scores +inf; the optimizer gets this finite value instead
 
 

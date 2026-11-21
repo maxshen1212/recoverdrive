@@ -122,6 +122,28 @@ def test_select_worst_per_campaign():
     assert all(not r["satisfied"] for r in out)
 
 
+def test_select_worst_carla_lowest_r5_per_hazard():
+    from recoverdrive.falsify import select_worst_carla
+
+    def row(hazard, r5, route=0):
+        return {"hazard": hazard, "R5": r5, "params": {"route": route, "seed": 1}}
+
+    rows = [row("pedestrian", 0.5, 0), row("pedestrian", -1.0, 1), row("pedestrian", -1.0, 1),  # duplicate draw
+            row("pedestrian", None, 2), row("pedestrian", 0.2, 3), row("lead_brake", 0.4)]
+    out = select_worst_carla(rows, 2)
+    ped = [r for r in out if r["hazard"] == "pedestrian"]
+    assert [r["R5"] for r in ped] == [-1.0, 0.2]  # no duplicate, no None, lowest first
+    assert [r["R5"] for r in out if r["hazard"] == "lead_brake"] == [0.4]
+
+
+def test_resume_mismatch():
+    from recoverdrive.falsify import resume_mismatch
+
+    assert not resume_mismatch(None, {"a": 1})  # no earlier trial: nothing to compare
+    assert not resume_mismatch({"b": 0.5, "a": 1}, {"a": 1, "b": 0.5})  # key order does not matter
+    assert resume_mismatch({"a": 1, "b": 0.5}, {"a": 1, "b": 0.25})
+
+
 def test_cached_detector_cache_only_raises_on_miss():
     cache = DictCache()
     det = CachedDetector(cache, ["car"], allow_miss=False)
