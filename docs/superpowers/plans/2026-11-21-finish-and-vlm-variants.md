@@ -95,3 +95,25 @@ check on 2 dev scenes is allowed to fix format errors only.
 - Merge `worktree-course-requirements` into `main` (in the main checkout), run the tests there, push `main` and the
   branch.
 - Verification: `git log origin/main -1` shows the merge.
+
+## Round 2 (after the stop-hook review, 2026-11-21 06:25)
+
+The review found the exploration stopped too early (6 variants) and left D6/D7 open. Round 2 adds combinations that
+follow from the round-1 findings, and closes the open items that need no user decision. The test split stays
+deferred (D5: spec §5.4 needs the user's approval for a new method).
+
+### T10: Three more combinations
+- `perceive_trust`: the user's flow (VLM notes on the raw data → combined with the pipeline's check report → one
+  final VLM call), with the frozen guidance kept ("the checks are reliable") and a reasoning field.
+- `imgflag`: the VLM answers only about image quality (one call, ok/abnormal per camera); an abnormal camera becomes
+  one more flag (`camera:<C>:vlm_image`) in the report and the recovery; the frozen Ours call decides.
+- `imgflag_checks`: the same VLM image flag added to the rules-only monitor, with no deciding VLM call.
+- Verification: tests (no flag → the frozen Ours prompt, so the cache answers; flag reaches report and recovery),
+  replay check 4830/4830.
+
+### T11: Screen them on the same frames (dev, seed 0, 7 sensor faults) — `vlm_screen_s0_round2`.
+### T12: Seeds 1–2 for the references and `think_trust` (`vlm_trust_s12`), and for the best round-2 variant.
+### T13: Agent faults A1–A3 (seed 0) for the best variants.
+### T14: CARLA: replay the 5 lowest-R4 scenarios per hazard (the rotated-camera violations) and the lowest-R5 scenario
+per hazard (the collision) with `imgflag_checks` (`carla_v2_imgflag_r4`, `carla_v2_imgflag_r5`).
+### T15: Update figures, `docs/vlm-variants.md`, the report Doc, provenance; merge and push again.
