@@ -77,8 +77,8 @@ SAM 3 and VLM answers are reused. "dirty" below means only run-log files were un
 | Seeds 1–2: B0, checks-only, Ours-detect/full, `think_trust` | `eval/vlm_trust_s12/` | `9a55dcb` | Recorded. |
 | Seeds 1–2: `imgflag`, `imgflag_checks` | `eval/vlm_imgflag_s12/` | `47b6f2b` (dirty: figures script and docs only) | Recorded. |
 | Agent faults A1–A3 (dev, seed 0): Ours, `think_trust`, `imgflag` | `eval/vlm_agent_s0/` | `47b6f2b` | Recorded. |
-| CARLA replays with `imgflag_checks` (5 lowest-R4 and the lowest-R5 scenario per hazard) | `falsify/carla_v2_imgflag_{r4,r5}/` | `47b6f2b` | Recorded. |
-| Figures and tables of this run | `report_figures/results_2026-11-21.{md,json}`, `fig6`–`fig10`; `docs/media/{falsification,vlm_variants,vlm_variants_per_fault,vlm_replays,dataflow,assurance_case}.png` (tracked) | branch head | `scripts/make_results_figures.py`, `make_dataflow_figure.py`, `make_assurance_figure.py` |
+| CARLA replays with `imgflag_checks` (5 lowest-R4 and the lowest-R5 scenario per hazard) | `falsify/carla_v2_imgflag_{r4,r4_ped,r5}/` | `47b6f2b` | Recorded. The pedestrian R4 replays ran in a second process (`r4_ped`); the first process was stopped before them. |
+| Figures and tables of this run | `report_figures/results_2026-11-21.{md,json}`, `fig6`–`fig10`; `docs/media/{falsification,vlm_variants,vlm_variants_per_fault,vlm_variants_seeds,vlm_cost,vlm_replays,dataflow,assurance_case}.png` (tracked) | branch head | `scripts/make_results_figures.py`, `make_dataflow_figure.py`, `make_assurance_figure.py` |
 | Demo video | Drive `experiment_result/report_figures_2026-11-21/recoverdrive_demo_c1_pedestrian.mp4` | `c8361ce` | `scripts/make_demo_video.py` from `e3/demo/` |
 
 Later commits (`528b367..14d3024`) changed only documentation, comments, the model download script, the CARLA

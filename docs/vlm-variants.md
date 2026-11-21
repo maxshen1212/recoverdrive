@@ -167,7 +167,7 @@ standard deviation over the 3 seeds (`docs/media/vlm_variants_seeds.png`).
 | Method | F1 | Right sensor | False alarm | Unnecessary fallback | Missed fallback | VLM calls per frame |
 |---|---|---|---|---|---|---|
 | Checks-only (no VLM) | 0.730 ± 0.003 | 0.946 ± 0.008 | 0.087 ± 0.005 | 0.044 ± 0.003 | 0.079 ± 0.004 | 0 |
-| Ours-full (frozen) | 0.729 ± 0.003 | 0.947 ± 0.010 | 0.089 ± 0.006 | 0.050 ± 0.002 | 0.079 ± 0.004 | 2.07 |
+| Ours-full (frozen) | 0.729 ± 0.003 | 0.947 ± 0.010 | 0.089 ± 0.006 | 0.050 ± 0.002 | 0.079 ± 0.004 | 2.06 |
 | Think, trusting the checks | 0.726 ± 0.005 | 0.885 ± 0.006 | 0.149 ± 0.001 | 0.084 ± 0.001 | 0.071 ± 0.007 | 2.29 |
 | VLM image flag → Ours | 0.727 ± 0.002 | 0.842 ± 0.006 | 0.251 ± 0.004 | 0.149 ± 0.002 | 0.056 ± 0.001 | 3.48 |
 | VLM image flag → checks-only | 0.726 ± 0.003 | 0.844 ± 0.001 | 0.267 ± 0.003 | 0.137 ± 0.001 | 0.054 ± 0.002 | 1.00 |

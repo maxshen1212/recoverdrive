@@ -7,8 +7,8 @@
 - Continues `docs/superpowers/runs/2026-11-20-course-requirements.md` (Phase B tasks B3–B7).
 
 ## Status
-Current: round 2. T10–T14 done; vLLM stopped (GPUs 3, 4, 7 at 2 MiB). Next: T15 (figures pushed, report Doc,
-provenance Doc, Drive, merge and push).
+Current: round 2 done (T10–T15). vLLM and CARLA stopped (GPUs 3, 4, 7 at 2 MiB). Only open item: D5 (test split,
+needs your OK).
 
 Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs/falsify/`):
 - B3 done: `nuscenes_gpu_v1`, C2/C3 × R1/R2/R3/R6 × random/TPE, 960 trials (checks_only).
@@ -46,6 +46,7 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 | T11 | 67f9493 | `vlm_screen_s0_round2`: 42 runs, 1,701 frames, 0 errors; bootstrap vs Ours-full | `perceive_trust` F1 0.617 (gap +0.109 [+0.070, +0.149]); `imgflag` 0.726 (−0.001 [−0.028, +0.025]) with false alarm 0.246 vs 0.089; `imgflag_checks` 0.723 at 1 call/frame |
 | T14 | e0a5990 | `carla_v2_imgflag_{r4,r4_ped,r5}`: 12 replays, all finished (the cut-off duplicate of the main R4 process is kept as `pedestrian_confirm.partial-20261121T0805`) | front camera isolated 0/153 fault steps; rear camera isolated on 65/308 clean steps ("frozen"); R4 3/10 coincidental fixes, 1 new violation; collision unchanged |
 | T12 | (this commit) | `vlm_trust_s12`, `vlm_imgflag_s12`: 84 runs and 3,402 frames each, 0 frame errors; figures regenerated | 3 seeds: F1 0.729 ± 0.003 Ours-full, 0.726 ± 0.005 `think_trust`, 0.727 ± 0.002 `imgflag`, 0.726 ± 0.003 `imgflag_checks`; dataflow diagram lists the round-2 variants |
+| T15 | (this commit) | report Doc read back and PDF export checked; provenance Doc read back; Drive file sizes match; 181 passed, ruff clean | merged into `main` by fast-forward and pushed with this commit |
 
 ## Drive
 - Report Doc `1TejQjwoDeW_gQMlVCWMl-G1R87ICXqNJk1hCnP4fHA8`, updated in place (title unchanged).
@@ -54,6 +55,12 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
   (`16TnNjXg6KOq0jPG1VVI-2WtfMhUDf2w7`, 7,020,097 bytes) and 7 figures.
 - `experiment_result/recoverdrive_results_2026-11-21_{summaries,screen_frames_part1,screen_frames_part2,trust_frames}.zip`
   (split because the connector refuses requests over 10 MB).
+- Round 2 (16:36 UTC): report Doc updated in place (variants paragraph, 3 table rows, round-2 paragraphs, seeds table,
+  Figures 2, 9 and 10 replaced from `docs/media` at `6459ea8`, Abstract, discussion and Conclusion sentences;
+  PDF export checked, 26 pages); provenance Doc: 5 round-2 rows. Drive `report_figures_2026-11-21`:
+  `fig_vlm_variants_dev_round2.png`, `fig_vlm_variants_per_fault_f1_round2.png`, `fig_vlm_cost_vs_f1_round2.png`,
+  `fig_vlm_variants_seeds.png`, `fig_system_dataflow_round2.png`; `experiment_result`:
+  `recoverdrive_results_2026-11-21_round2_{summaries,screen_frames,seeds_trust_frames,seeds_imgflag_agent_frames}.zip`.
 
 ## Deferred questions
 - D3 (T3): variant prompts are written once, not tuned (one smoke check for format errors only).
