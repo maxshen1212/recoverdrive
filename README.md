@@ -49,8 +49,8 @@ monitor and in 0 of 12 with it.
 
 | | Minimum |
 |---|---|
-| OS / GPU | Linux, one NVIDIA GPU with ≥ 32 GB free (VLM server ~24 GB + SAM 3 ~3 GB). Tested on RTX 6000 Ada 48 GB. |
-| Driver | NVIDIA driver with CUDA 13 support (tested: 580) |
+| OS / GPU | Linux x86_64, one NVIDIA GPU with ≥ 32 GB free (VLM server ~24 GB + SAM 3 ~3 GB). Tested on RTX 6000 Ada 48 GB. |
+| Driver | NVIDIA driver with CUDA 12 support (tested: 565 and 580). The envs use CUDA 12 builds (torch cu126, vLLM cu129), so Blackwell GPUs (which need CUDA ≥ 12.8 in torch) are not supported. |
 | Tools | [uv](https://docs.astral.sh/uv/) ≥ 0.12 (it installs Python 3.12), `wget` |
 | Disk | ~45 GB: Python envs ~12 GB, nuScenes-mini ~5 GB (+4 GB while downloading), model weights ~21 GB |
 | Accounts | [Hugging Face](https://huggingface.co) account with approved access to [facebook/sam3](https://huggingface.co/facebook/sam3) |

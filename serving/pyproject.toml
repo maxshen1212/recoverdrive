@@ -1,9 +1,27 @@
 # Separate environment for the VLM server: vLLM pins its own torch/transformers.
+# CUDA 12 builds, so the env runs on any driver with CUDA 12 support (tested: 565 and 580). vLLM 0.32.0's PyPI wheel
+# is a CUDA 13 build (driver >= 580), so vLLM comes from its GitHub release wheel built with CUDA 12.9, and
+# torch, torchvision, torchaudio and torchcodec from the PyTorch cu129 index. They are listed as direct dependencies
+# because tool.uv.sources applies only to direct dependencies. torchcodec 0.16.0: 0.17.0 has only a CUDA 13 build.
 [project]
 name = "recoverdrive-serving"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["vllm==0.32.0"]
+dependencies = ["vllm==0.32.0", "torch==2.13.0", "torchvision==0.28.0", "torchaudio==2.11.0", "torchcodec==0.16.0"]
 
 [tool.uv]
 package = false
+# The vLLM CUDA 12 wheel exists for Linux x86_64 only.
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
+
+[tool.uv.sources]
+vllm = { url = "https://github.com/vllm-project/vllm/releases/download/v0.32.0/vllm-0.32.0+cu129-cp38-abi3-manylinux_2_28_x86_64.whl" }
+torch = { index = "pytorch-cu129" }
+torchvision = { index = "pytorch-cu129" }
+torchaudio = { index = "pytorch-cu129" }
+torchcodec = { index = "pytorch-cu129" }

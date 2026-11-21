@@ -27,7 +27,7 @@ The repo (github.com/maxshen1212/recoverdrive, **public**, MIT license; DriveAge
 Always `source scripts/env.sh` first. It points `UV_CACHE_DIR` at `/data/$USER/.cache/uv` (the root disk is ~95% full), sets `NUSCENES_ROOT` (default `data/nuscenes`), and defaults `CUDA_VISIBLE_DEVICES=0`. The GPUs are shared: check `nvidia-smi` and override `CUDA_VISIBLE_DEVICES` per command.
 
 ```bash
-uv sync                                         # main env (.venv, Python 3.12, torch cu130)
+uv sync                                         # main env (.venv, Python 3.12, torch cu126)
 uv sync --project serving                       # vLLM env (serving/.venv)
 ./scripts/download_nuscenes_mini.sh             # nuScenes v1.0-mini -> data/nuscenes
 uv run pytest                                   # all unit tests
@@ -99,4 +99,4 @@ Read the spec before writing pipeline code. Points that span modules:
 
 ## Compute environment
 
-Shared, headless lab server: 4 × RTX 6000 Ada (48 GB), driver 580 / CUDA 13.0. Always set `CUDA_VISIBLE_DEVICES` to pin GPUs. CARLA (0.9.x) must run with `-RenderOffScreen`. SAM 3 weights require accepting the license on Hugging Face before download. If a package does not support CUDA 13, the spec's fallback is Docker or pinned versions.
+Shared, headless lab servers with RTX 6000 Ada (48 GB) GPUs: the first server has 4 GPUs and driver 580 (CUDA 13.0); gvl2 has 8 GPUs and driver 565 (CUDA 12.7). Both envs use CUDA 12 builds (main: torch cu126; `serving/`: the vLLM 0.32.0 cu129 GitHub wheel with torch cu129, see `serving/pyproject.toml`), so the same `uv sync` works on both. E1–E5 were run with the earlier cu130 builds on the first server. Always set `CUDA_VISIBLE_DEVICES` to pin GPUs. CARLA (0.9.x) must run with `-RenderOffScreen`. SAM 3 weights require accepting the license on Hugging Face before download.
