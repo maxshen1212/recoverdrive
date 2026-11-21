@@ -28,6 +28,7 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 | T2b | (this commit) | CARLA triage: 29 R4 + 1 R5 violation (1 collision), all undetected C2 rotations; 0 bug candidates | falsification log, CARLA section |
 | T1 | (this commit) | CARLA confirmation: 10 replays with Ours-full, exit 0; the collision scenario also collides with Ours-full | B5 complete |
 | T13 | (this commit) | `vlm_agent_s0`: 729 frames, 0 errors; 181 passed, ruff clean | recovery 0.661 Ours-full, 0.622 `think_trust`, 0.661 `imgflag`; unnecessary fallback 0.056 / 0.089 / 0.154 |
+| T11 | (this commit) | `vlm_screen_s0_round2`: 42 runs, 1,701 frames, 0 errors; bootstrap vs Ours-full | `perceive_trust` F1 0.617 (gap +0.109 [+0.070, +0.149]); `imgflag` 0.726 (−0.001 [−0.028, +0.025]) with false alarm 0.246 vs 0.089; `imgflag_checks` 0.723 at 1 call/frame |
 
 ## Drive
 - Report Doc `1TejQjwoDeW_gQMlVCWMl-G1R87ICXqNJk1hCnP4fHA8`, updated in place (title unchanged).

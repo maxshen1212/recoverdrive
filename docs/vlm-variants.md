@@ -53,24 +53,28 @@ one smoke run on one dev scene checked only the output format.
 
 - Dev split only (6 scenes). A new variant on the test split needs the user's approval (spec §5.4: tune on dev,
   freeze, run test once).
-- Screening: all variants and the references (B0, checks-only, Ours-detect, Ours-full) in one run over the same
-  frames: sensor faults C1–C4, L1, L2, L4, seed 0 (`outputs/eval/vlm_screen_s0`).
-- Planned: the best variants with seeds 1–2 and all 10 faults. Changed under D7: since no variant beats Ours-full on
-  seed 0, block-bootstrap intervals over fault episodes measure the gaps instead, and two variants replay the
-  falsification counterexamples.
+- Screening: all variants and the references (B0, checks-only, Ours-detect, Ours-full) over the same frames: sensor
+  faults C1–C4, L1, L2, L4, seed 0 (round 1: `outputs/eval/vlm_screen_s0`, `vlm_screen_s0_trust`; round 2:
+  `vlm_screen_s0_round2`).
+- Changed under D7: since no variant beat Ours-full on seed 0, block-bootstrap intervals over fault episodes measure
+  the gaps. Round 2 then added seeds 1–2 for the references, `think_trust` and the image-flag variants
+  (`vlm_trust_s12`, `vlm_imgflag_s12`), the agent faults for the variants that keep the frozen call
+  (`vlm_agent_s0`), replays of the nuScenes counterexamples, and CARLA replays of the closed-loop violations.
 
 ## Results
 
-Screening on the dev split: seed 0, the 7 sensor faults (C1–C4, L1, L2, L4), 42 runs, 1,701 frames, 0 frame errors
-(`outputs/eval/vlm_screen_s0`, `outputs/eval/vlm_screen_s0_trust`; numbers from
-`report_figures/results_2026-11-21.json`). All methods see the same frames; every `_full` method has the recovery
-controller and shield of Ours-full.
+Screening on the dev split: seed 0, the 7 sensor faults (C1–C4, L1, L2, L4), 42 runs, 1,701 frames, 0 frame errors in
+either round (numbers from `report_figures/results_2026-11-21.json`). All methods see the same frames; every `_full`
+method has the recovery controller and shield of Ours-full. Rows in the order of `docs/media/vlm_variants.png`.
 
 | Method | F1 | P | R | Right sensor | False alarm | Unnecessary fallback | Missed fallback | VLM calls per frame |
 |---|---|---|---|---|---|---|---|---|
 | Checks-only (no VLM) | 0.727 | 0.876 | 0.621 | 0.948 | 0.086 | 0.044 | 0.075 | 0 |
 | Ours-full (frozen) | 0.726 | 0.871 | 0.621 | 0.950 | 0.089 | 0.050 | 0.075 | 2.06 |
 | Think, trusting the checks | 0.732 | 0.814 | 0.665 | 0.880 | 0.149 | 0.085 | 0.062 | 2.29 |
+| Perceive → decide, trusting the checks (round 2) | 0.617 | 0.817 | 0.495 | 0.856 | 0.108 | 0.058 | 0.117 | 3.31 |
+| VLM image flag → Ours (round 2) | 0.726 | 0.739 | 0.714 | 0.848 | 0.246 | 0.152 | 0.056 | 3.47 |
+| VLM image flag → checks-only (round 2) | 0.723 | 0.727 | 0.719 | 0.843 | 0.264 | 0.137 | 0.054 | 1.00 |
 | Think | 0.599 | 0.661 | 0.548 | 0.776 | 0.274 | 0.149 | 0.112 | 2.78 |
 | Think, no checks | 0.613 | 0.529 | 0.729 | 0.474 | 0.633 | 0.328 | 0.071 | 3.30 |
 | Perceive → decide | 0.516 | 0.800 | 0.381 | 0.856 | 0.093 | 0.050 | 0.165 | 3.31 |
@@ -78,12 +82,18 @@ controller and shield of Ours-full.
 | Per-sensor → decide | 0.508 | 0.757 | 0.382 | 0.888 | 0.120 | 0.069 | 0.157 | 9.34 |
 
 Block-bootstrap 95% intervals over fault episodes (2,000 draws, paired) for Ours-full minus each variant:
-- Every variant except `think_trust` has a lower F1, and every interval excludes 0: per-sensor +0.218
-  [+0.173, +0.264], perceive +0.209 [+0.163, +0.258], perceive without checks +0.323 [+0.271, +0.372], think +0.127
+- Every variant that adds the VLM's own first look to the deciding call, or is told the checks can be wrong, has a
+  lower F1, and every interval excludes 0: per-sensor +0.218 [+0.173, +0.264], perceive +0.209 [+0.163, +0.258],
+  perceive without checks +0.323 [+0.271, +0.372], perceive trusting the checks +0.109 [+0.070, +0.149], think +0.127
   [+0.077, +0.176], think without checks +0.113 [+0.072, +0.152].
 - `think_trust` has the same F1 (difference −0.007 [−0.026, +0.012]) at a different operating point: fewer missed
   fallbacks (0.062 against 0.075; difference +0.012 [+0.004, +0.021]) but more false alarms (0.149 against 0.089)
   and unnecessary fallbacks (0.085 against 0.050), and it names the right sensor less often (0.880 against 0.950).
+- The image-flag variants have the same F1 as well (image flag → Ours −0.001 [−0.028, +0.025]; image flag →
+  checks-only +0.003 [−0.025, +0.028]), at a much more cautious operating point: fewer missed fallbacks (0.056
+  against 0.075; +0.019 [+0.009, +0.029]) for almost three times the false alarms (0.246 against 0.089; −0.157
+  [−0.194, −0.123]) and unnecessary fallbacks (0.152 against 0.050), and the right sensor on 0.848 of the alarms
+  instead of 0.950.
 
 F1 per fault (`docs/media/vlm_variants_per_fault.png`):
 
@@ -92,11 +102,31 @@ F1 per fault (`docs/media/vlm_variants_per_fault.png`):
 | Checks-only | 0.74 | 0.49 | 0.48 | 0.74 | 0.95 | 0.49 | 0.97 |
 | Ours-full | 0.74 | 0.49 | 0.47 | 0.74 | 0.95 | 0.49 | 0.97 |
 | Think, trusting the checks | 0.84 | 0.54 | 0.53 | 0.73 | 0.92 | 0.42 | 0.96 |
+| Perceive → decide, trusting the checks | 0.64 | 0.37 | 0.57 | 0.57 | 0.73 | 0.23 | 0.97 |
+| VLM image flag → Ours | 0.70 | 0.57 | 0.64 | 0.74 | 0.88 | 0.55 | 0.93 |
+| VLM image flag → checks-only | 0.70 | 0.57 | 0.64 | 0.74 | 0.87 | 0.55 | 0.91 |
 | Think | 0.36 | 0.47 | 0.66 | 0.54 | 0.72 | 0.39 | 0.91 |
 | Think, no checks | 0.55 | 0.59 | 0.63 | 0.54 | 0.61 | 0.60 | 0.74 |
 | Perceive → decide | 0.07 | 0.18 | 0.58 | 0.64 | 0.58 | 0.16 | 0.97 |
 | Perceive → decide, no checks | 0.21 | 0.19 | 0.56 | 0.19 | 0.20 | 0.20 | 0.91 |
 | Per-sensor → decide | 0.07 | 0.09 | 0.64 | 0.38 | 0.80 | 0.11 | 0.90 |
+
+What the VLM image check sees (round 2, `imgflag_checks` outputs of the screen; one answer per frame for all cameras):
+
+| Frames | The VLM marks the right camera abnormal |
+|---|---|
+| C3 degraded image, high severity | 48 / 55 (87%) |
+| C3, medium | 16 / 44 (36%) |
+| C3, low | 2 / 21 |
+| C2 misalignment (rotation or shift), all severities | 11 / 120 (9%) |
+| C1 wrong view | 1 / 120 |
+| C4 frozen image | 3 / 120 |
+| Clean frames: any camera marked abnormal | 163 / 861 (19%): night scenes 122 / 287 (43%), day scenes 41 / 574 (7%) |
+
+On clean frames its stated reasons are noise (76 frames), dark or black (65), blur (61), glare or washed out (56),
+frozen (20) and tilt or shift (9). On the fault frames where the image flag raises an alarm that Ours-full does not
+(78), the VLM names the faulty camera in 34 and another camera in 44: about half of the recall gain is a coincidence
+of a false flag with a fault elsewhere (for example 14 alarms on L2 frames, a LiDAR fault, from camera flags).
 
 ### What this shows
 
@@ -106,22 +136,20 @@ F1 per fault (`docs/media/vlm_variants_per_fault.png`):
   "a false positive"; on an L2 frame it sees "a dense, uniform point cloud" and calls the camera–LiDAR
   disagreement noise. A swapped viewpoint with plausible content and a calibration shift are visible to geometry,
   not to the eye.
+- **The VLM's own first look hurts even with the frozen guidance.** `perceive_trust` keeps "the checks are reliable"
+  and only adds the VLM's notes on the raw data before the final call; recall still drops from 0.621 to 0.495
+  (missed fallbacks 0.117 against 0.075). So round 1's drop was not only the "checks can be wrong" sentence: the
+  notes themselves ("plausible", "consistent") outweigh the flags.
 - **Reasoning itself is not the problem.** With the frozen guidance kept, reasoning first (`think_trust`) gives the
   same F1 and moves the monitor toward caution: fewer missed fallbacks, more false alarms. Its largest per-fault
-  gain is on C1 (0.84 against 0.74).
-- **The VLM's own perception helps on image-quality faults.** Without any check report, `think_nochecks` reaches
-  F1 0.59 on misalignment (C2) and 0.63 on degraded images (C3), above the checks (0.49, 0.48), and every
-  image-centric variant beats the checks on C3. These two faults have the lowest test F1 of Ours-full (C2 0.47,
-  C3 0.45), and misalignment caused every closed-loop violation the falsification found. The price is a 63%
-  false-alarm rate and weak LiDAR and viewpoint diagnosis.
+  gain is on C1 (0.84 against 0.74). The Thinking model in E5 showed the same pattern on the test split.
+- **As a feature extractor, the VLM sees strong image degradation and little else.** Asked only about image quality,
+  it marks 87% of high-severity degraded images (C3), which raises F1 on C3 from 0.47 to 0.64, but it almost never
+  sees a rotated or shifted camera (9%), a swapped view (1%) or a frozen image (3%), and it calls 43% of clean night
+  frames abnormal. Pooled F1 stays at 0.726: the C2/C3/L2 gains are paid for by false alarms everywhere else. The
+  deciding VLM call adds nothing over the rules here (image flag → checks-only: F1 0.723 with one call per frame).
 - **More calls are not better.** The per-sensor variant uses 9.3 calls per frame (4.5 times Ours-full) and has the
   second-lowest F1 (0.508; 0.07 on C1).
-
-A direction that follows from this, not tested here: keep the checks in charge and ask the VLM only about image
-quality (C2, C3), where it sees more than the geometry, with its answer as one more flag rather than a veto.
-
-Not done (deferred question D7): seeds 1–2 (no variant beats Ours-full on seed 0), the agent faults A1–A3 for the
-variants, and the test split (a new variant needs the user's approval under spec §5.4).
 
 ### Agent faults (round 2)
 
