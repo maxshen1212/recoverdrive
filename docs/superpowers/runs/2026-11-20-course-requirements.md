@@ -32,7 +32,11 @@ Tasks:
   then insert it in place. If you prefer otherwise: insert the Phase A text now and update it later.
 
 ## Blockers
-(none)
+- 2026-11-21 00:15 (B3): BLOCKED. The user stopped the GPU watcher on this server and moved the project to gvl2,
+  where 6 of 8 GPUs are free. Running Phase B there needs decisions outside the goal's scope: GPU jobs on another
+  machine, rebuilding the environments there, and about 21 GB of model weights (Qwen3-VL-8B and the gated SAM 3),
+  either copied from this server or downloaded with a Hugging Face login. No GPU job is running; all code is
+  committed (`619343b`, plus this log).
 
 ## Waiting log
 - 2026-11-20 16:44–22:45: watcher 1 timed out after 6 h; no card ever had >= 8 GB free with <= 50% load (all 4 at
