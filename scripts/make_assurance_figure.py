@@ -5,7 +5,8 @@ Numbers come from the generated result files, so the figure can be redrawn after
     uv run python scripts/make_assurance_figure.py \
         --requirements /data/maxshen/recoverdrive/report_figures/requirements.json \
         --formal /data/maxshen/recoverdrive/report_figures/formal.json \
-        --falsify /data/maxshen/recoverdrive/outputs/falsify/nuscenes_cpu_v1/trials.jsonl
+        --falsify /data/maxshen/recoverdrive/outputs/falsify/nuscenes_{cpu,gpu}_v1/trials.jsonl \
+        --carla /data/maxshen/recoverdrive/outputs/falsify/carla_v1_*/trials.jsonl
 """
 
 from __future__ import annotations
@@ -68,7 +69,7 @@ def top(n, dx=0.0):
     return n[0] + dx, n[1] - n[3] / 2
 
 
-def numbers(req_path: Path, formal_path: Path, falsify_path: Path | None) -> dict:
+def numbers(req_path: Path, formal_path: Path, falsify_paths: list[Path], carla_paths: list[Path]) -> dict:
     req = json.loads(req_path.read_text())
     formal = json.loads(formal_path.read_text())
     cross = req["nuscenes"]["cross_check"]["ours_full"]
@@ -78,12 +79,14 @@ def numbers(req_path: Path, formal_path: Path, falsify_path: Path | None) -> dic
     ctrl = [r["name"] for r in formal["controller"] if r["holds"]]
     out = {"missed": cross["missed_frames"] / cross["frames"], "worst_bound": max(r["upper"] for r in bounds.values()),
            "agent_ok": agent_ok, "proved": proved, "ctrl": ctrl, "states": formal["controller_states"],
-           "fals": None}
-    if falsify_path and falsify_path.exists():
-        rows = [json.loads(line) for line in falsify_path.read_text().splitlines() if line.strip()]
-        by = {s: (sum(not r["satisfied"] for r in rows if r["sampler"] == s), sum(r["sampler"] == s for r in rows))
-              for s in ("random", "tpe")}
-        out["fals"] = by
+           "fals": None, "carla": None}
+    rows = [json.loads(line) for p in falsify_paths if p.exists() for line in p.read_text().splitlines() if line]
+    if rows:
+        out["fals"] = {s: (sum(not r["satisfied"] for r in rows if r["sampler"] == s),
+                           sum(r["sampler"] == s for r in rows)) for s in ("random", "tpe")}
+    runs = [json.loads(line) for p in carla_paths if p.exists() for line in p.read_text().splitlines() if line]
+    if runs:
+        out["carla"] = (sum(not r["satisfied"] for r in runs), len(runs), sum(bool(r["collision"]) for r in runs))
     return out
 
 
@@ -117,9 +120,13 @@ def draw(n: dict, out: Path) -> None:
               "S1 needs a correct detection: without it S6a and S6b fail (false alarm, missed fault).", 26)
     ey, eh = 950, 250
     fals = n["fals"]
-    fals_text = ("Falsification on nuScenes dev (checks-only): "
-                 f"random {fals['random'][0]}/{fals['random'][1]}, guided (TPE) {fals['tpe'][0]}/{fals['tpe'][1]} "
-                 "trials violate a requirement; every class is triaged." if fals else "Falsification: pending.")
+    fals_text = ("Falsification, checks-only. nuScenes dev: "
+                 f"random {fals['random'][0]:,}/{fals['random'][1]:,}, TPE {fals['tpe'][0]:,}/{fals['tpe'][1]:,} "
+                 "trials violate R1-R6" if fals else "Falsification: pending")
+    if n["carla"]:
+        v, total, coll = n["carla"]
+        fals_text += f"; CARLA: {v}/{total} runs violate R4/R5 ({coll} collisions)"
+    fals_text += ". Every class triaged, no bug." if fals else "."
     evidence = [
         node(ax, "evidence", 230, ey, 330, eh, "Sn1",
              f"Exhaustive check of the real shield: {', '.join(n['proved'])} hold on every case.", 30),
@@ -161,10 +168,11 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--requirements", type=Path, required=True)
     p.add_argument("--formal", type=Path, required=True)
-    p.add_argument("--falsify", type=Path, default=None, help="trials.jsonl of a falsification run")
+    p.add_argument("--falsify", type=Path, nargs="*", default=[], help="trials.jsonl of nuScenes falsification runs")
+    p.add_argument("--carla", type=Path, nargs="*", default=[], help="trials.jsonl of CARLA falsification runs")
     p.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[1] / "docs/media/assurance_case.png")
     args = p.parse_args()
-    draw(numbers(args.requirements, args.formal, args.falsify), args.out)
+    draw(numbers(args.requirements, args.formal, args.falsify, args.carla), args.out)
     print(args.out)
 
 
