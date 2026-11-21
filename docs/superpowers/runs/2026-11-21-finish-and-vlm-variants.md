@@ -7,9 +7,8 @@
 - Continues `docs/superpowers/runs/2026-11-20-course-requirements.md` (Phase B tasks B3–B7).
 
 ## Status
-Current: T1 running (CARLA campaigns on GPU 7; pedestrian TPE restarted at 03:27 on port 2040 after its server did
-not answer in 120 s). T4 running since 03:31: `vlm_screen_s0` (dev, 7 sensor faults, seed 0, 14 method outputs) on one
-vLLM server (GPU 4, port 8002). T2 nuScenes part done. Next: T6 figure scripts while the runs go on.
+Current: T1 confirmation running (2 CARLA servers + vLLM on GPU 7, port 8001); T4 screening running on GPU 4
+(port 8002). Next: restart the screening on both servers after the confirmation; then `think_trust` (D7).
 
 Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs/falsify/`):
 - B3 done: `nuscenes_gpu_v1`, C2/C3 × R1/R2/R3/R6 × random/TPE, 960 trials (checks_only).
@@ -25,6 +24,8 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 | T0 | 77bfb9f | 170 passed, ruff clean | plan, run log, CARLA `--resume` / `--confirm` |
 | T3 | dfd2846 | 175 passed, ruff clean; replay check 4830/4830 on `test_final` | `VLMVariant` (5 variants), prompts in `vlm.py`, `tests/test_variants.py`; resume keeps unreached rows |
 | T2a | (this commit) | triage of `gpu_v1`: 209 violating trials, 0 bug candidates; confirmations 145/147 and 67/67 still violated with Ours-full | falsification log, Phase B sections |
+| T1a | (this commit) | 4 CARLA campaigns complete: 160 runs (summary.md 40 each), all exit 0 | resumed with `--resume`; confirmation running |
+| T2b | (this commit) | CARLA triage: 29 R4 + 1 R5 violation (1 collision), all undetected C2 rotations; 0 bug candidates | falsification log, CARLA section |
 
 ## Deferred questions
 - D3 (T3): variant prompts are written once, not tuned (one smoke check for format errors only).

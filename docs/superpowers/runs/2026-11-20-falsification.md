@@ -101,3 +101,32 @@ pair with the full system (Qwen3-VL-8B, recovery, shield).
 The VLM repairs 2 of 214 counterexamples of the deterministic checks. This matches Step 1 ("the VLM confirms the
 flags"): the Ours prompt tells the VLM that the checks are reliable, so it follows them, including their false alarms
 and misses. This is the starting point of the VLM-centric variants (plan `2026-11-21-finish-and-vlm-variants.md`).
+
+## Phase B: closed-loop falsification in CARLA
+
+- `scripts/falsify_carla.py --budget 40` per (hazard, sampler), 4 campaigns, 160 runs, checks-only, Town01, on gvl2.
+  The campaigns stopped at 27 runs on 2026-11-21 01:10 and were resumed with `--resume` (finished trials read back
+  from their folders; two cut-off trials set aside as `trial_*.partial-*`). Outputs:
+  `outputs/falsify/carla_v1_{pedestrian,lead_brake}_{random,tpe}/`.
+- Search variables: route, trigger offset (±5 m), walker speed (1.0–2.5 m/s) or lead braking time (1–4 s), front
+  fault (C1, black camera, rotated camera C2, LiDAR dropout in the front sector), level, window, seed.
+
+| hazard | sampler | runs | R4 violations | R5 violations | collisions |
+|---|---|---|---|---|---|
+| lead car braking | random | 40 | 5 | 0 | 0 |
+| lead car braking | TPE | 40 | 17 | 0 | 0 |
+| pedestrian | random | 40 | 3 | 1 | 1 |
+| pedestrian | TPE | 40 | 4 | 0 | 0 |
+
+Triage (from the step logs):
+- C1 (31 runs) and the black front camera (18 runs): the front camera is isolated in every run, and R4 always holds.
+- LiDAR dropout in the front sector (37 runs): no R4 violation.
+- Rotated front camera (C2, 5–12°, 74 runs): the checks isolate the camera in only 7 runs. All 29 R4 violations
+  (no slow-down within 3 s of the fault) are undetected rotations.
+- The one collision (pedestrian, random trial 31): a 7.1° rotation (medium) that started 4 m before the trigger
+  raised no flag, so the monitor kept "healthy / continue" at 7.3 m/s. The TTC brake uses camera-confirmed objects
+  while the camera is not isolated; it fired at TTC 0.35 s, and braking to 1.2 m/s left a gap of −0.1 m.
+
+**Bug candidates: 0.** Every violation is a missed detection (the S6b class of the shield proof): a rotation the
+camera–LiDAR cross-check does not see. Misalignment (C2) is the weak spot both on nuScenes (test F1 0.47) and in
+closed loop, and the closed-loop search found a collision that E3 (C1 only) could not show.
