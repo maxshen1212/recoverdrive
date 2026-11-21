@@ -65,7 +65,12 @@ check on 2 dev scenes is allowed to fix format errors only.
   checks_only B0`.
 - Verification: `summary.md` per tag with E1/E2 tables, 0 frame errors.
 
-### T5: Best variants with 3 seeds, and on the falsification counterexamples
+### T5: Mechanism ablation, best variant on the counterexamples (changed, D7)
+- `think_trust` (the frozen prompt plus a reasoning field) on the screening frames separates the effect of reasoning
+  from the effect of distrusting the checks. Seeds 1–2 only if a variant beats Ours-full on seed 0; otherwise
+  block-bootstrap intervals over fault episodes on seed 0.
+
+### T5 (original wording): Best variants with 3 seeds, and on the falsification counterexamples
 - DEFAULT (D4): pick the 2 variants with the best pooled `_full` F1 on dev seed 0 whose unnecessary + missed fallback
   is not worse than Ours-full by more than 0.02. Run seeds 1 and 2 for them and for the references.
 - Replay the falsification counterexamples (`--confirm 10 --from-tag cpu_v1` and `gpu_v1`) with the best variant.

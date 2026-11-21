@@ -32,9 +32,10 @@ SLOTS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
 NAMES = {"B0": "B0 (no monitor)", "checks_only": "Checks-only", "ours_full": "Ours-full (frozen)",
          "think_full": "Think", "think_nochecks_full": "Think, no checks",
          "perceive_full": "Perceive → decide", "perceive_nochecks_full": "Perceive → decide, no checks",
-         "percam_full": "Per-sensor → decide"}
+         "percam_full": "Per-sensor → decide", "think_trust_full": "Think, trusting the checks"}
 REFERENCE = ("B0", "checks_only", "ours_full")
-VARIANTS = ("think_full", "think_nochecks_full", "perceive_full", "perceive_nochecks_full", "percam_full")
+VARIANTS = ("think_trust_full", "think_full", "think_nochecks_full", "perceive_full", "perceive_nochecks_full",
+            "percam_full")
 SENSOR_FAULTS = ["C1", "C2", "C3", "C4", "L1", "L2", "L4"]
 
 plt.rcParams.update({"font.size": 10, "axes.edgecolor": GRID, "axes.labelcolor": INK2, "xtick.color": INK2,

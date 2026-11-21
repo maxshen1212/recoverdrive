@@ -84,3 +84,12 @@ def test_agent_fault_hits_only_the_deciding_call():
 def test_build_methods_variants():
     names = [m.names for m in build_methods(["ours_full", "think_full", "percam_detect", "percam_full"], None, CFG)]
     assert names == [("ours_full",), ("think_full",), ("percam_detect", "percam_full")]
+
+
+def test_think_trust_keeps_the_frozen_guide_and_adds_reasoning():
+    m, fake = variant("think_trust")
+    m.step(make_ctx())
+    text = text_of(fake.calls[0])
+    assert "The deterministic checks are reliable" in text and "flags can be wrong" not in text
+    assert "write your step-by-step reasoning in the field analysis" in text
+    assert next(iter(fake.calls[0]["response_format"]["json_schema"]["schema"]["properties"])) == "analysis"

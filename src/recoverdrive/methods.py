@@ -37,6 +37,7 @@ from recoverdrive.vlm import (
     textchain_messages,
     textchain_schema,
     think_schema,
+    think_trust_messages,
     to_diagnosis,
 )
 
@@ -211,6 +212,7 @@ class VLMVariant(Ours):
     diagnosis agent. `_nochecks` variants get neither the check report nor the flags.
 
     think            one call: images + check report, reasoning first
+    think_trust      one call: the frozen Ours prompt (checks are reliable) + reasoning first (ablation of `think`)
     think_nochecks   one call: images only, reasoning first
     perceive         stage 1 notes on every sensor from the images (no checks); stage 2 decides from notes + report + images
     perceive_nochecks  the same without the report
@@ -218,7 +220,8 @@ class VLMVariant(Ours):
                      stage 2 decides from the notes + report + current mosaic and top view
     Stage-1 calls are not diagnosis calls: agent faults (A1-A3) hit only the deciding call, as for Ours."""
 
-    VARIANTS: ClassVar[tuple[str, ...]] = ("think", "think_nochecks", "perceive", "perceive_nochecks", "percam")
+    VARIANTS: ClassVar[tuple[str, ...]] = ("think", "think_nochecks", "perceive", "perceive_nochecks", "percam",
+                                           "think_trust")
     MAX_TOKENS: ClassVar[dict[str, int]] = {"decide": 768, "observe": 640, "sensor": 200}
     CAMERA_PX: ClassVar[tuple[int, int]] = (960, 540)
 
@@ -262,7 +265,10 @@ class VLMVariant(Ours):
                  attempt_idx: int | None = None) -> Attempt:
         summary = None if self.no_checks else ctx.summary
         prev = None if self.variant == "percam" else ctx.prev_mosaic  # percam's notes already compare frames
-        msgs = decide_messages(summary, self.notes, ctx.mosaic, prev, ctx.bev)
+        if self.variant == "think_trust":
+            msgs = think_trust_messages(ctx.summary, ctx.mosaic, ctx.prev_mosaic, ctx.bev)
+        else:
+            msgs = decide_messages(summary, self.notes, ctx.mosaic, prev, ctx.bev)
         return self.caller.call(msgs, think_schema(ctx.sensors), temperature=temperature, seed=seed,
                                 max_tokens=self.MAX_TOKENS["decide"], name="diagnosis", attempt_idx=attempt_idx)
 

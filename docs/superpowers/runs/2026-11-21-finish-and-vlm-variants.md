@@ -33,6 +33,12 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 - D6 (T4): the screening covers the 7 sensor faults only (one vLLM server; no second GPU was free at 03:30). The
   agent faults A1–A3 test the re-ask and vote, which all variants share with Ours-full; they run for the top
   variants in T5. If you prefer otherwise: add A1–A3 to the screen (about +40% VLM time).
+- D7 (T5): plan change. The partial screen showed every variant below Ours-full in recall. `think` changes two
+  things at once (reasoning first, and "the checks can be wrong"), so T5 adds the clean ablation `think_trust`
+  (frozen prompt + reasoning field) on the same frames, and replays the falsification counterexamples with the
+  most promising variant. Seeds 1–2 run only if a variant beats Ours-full on seed 0; otherwise block-bootstrap
+  intervals over fault episodes on seed 0 measure the gap. If you prefer otherwise: 3 seeds for the best 2
+  variants anyway (about 4–5 h of VLM time on one shared GPU).
 - D5 (T4–T5): the variants run on the dev split only. A test-split run of a new variant needs your OK (spec §5.4).
 
 ## Blockers

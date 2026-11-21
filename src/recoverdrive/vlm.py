@@ -599,3 +599,16 @@ def lidar_observe_messages(bev: dict, prev_bev: dict | None, nominal_points: int
         "cloud is, whether points cover all directions, any empty wedge, shift or sudden change since the previous "
         "sweep. Two or three sentences; do not decide yet. Return JSON with: observation.")})
     return [{"role": "system", "content": VARIANT_SYSTEM}, {"role": "user", "content": content}]
+
+
+THINK_TRUST_NOTE = ("Before the verdict, write your step-by-step reasoning in the field analysis (at most about 120 "
+                    "words).")
+
+
+def think_trust_messages(summary: str, mosaic: dict, prev_mosaic: dict | None, bev: dict) -> list[dict]:
+    """`think_trust`: the frozen Ours messages (checks are reliable) plus a reasoning field before the verdict, so
+    the effect of reasoning is separated from the effect of distrusting the checks (`think`)."""
+    msgs = ours_messages(summary, mosaic, prev_mosaic, bev)
+    content = list(msgs[1]["content"])
+    content[-1] = {"type": "text", "text": content[-1]["text"] + "\n\n" + THINK_TRUST_NOTE}
+    return [msgs[0], {"role": "user", "content": content}]
