@@ -275,7 +275,7 @@ def step1_tables(summary: dict) -> tuple[dict, list[str]]:
     """FutureWork Step 1 sections: checks-only baseline, easy vs hard faults, bootstrap intervals, model size and
     the VLM gate. A section is skipped when its inputs do not exist yet."""
     out, lines = {}, []
-    names = {**NAMES, "checks_only": "Checks-only (no VLM)"}
+    names = {**NAMES, "checks_only": "Checks-only (no VLM)", "pramr_full": "PRAM-R-style (per sensor)"}
     main1, main2 = summary["test_main"]["e1"], summary["test_main"]["e2"]
     base = [{"method": names[m], **pick(row(main1, m), E1K), **pick(row(main2, m), E2K)} for m in NAMES]
     have_checks = (Path("outputs/eval/test_checks_only") / "summary.md").exists()
@@ -283,8 +283,14 @@ def step1_tables(summary: dict) -> tuple[dict, list[str]]:
         c1, c2, _ = tables("test_checks_only", ["checks_only"], [0, 1, 2], recovery=("checks_only",))
         base.append({"method": names["checks_only"], **pick(row(c1, "checks_only"), E1K),
                      **pick(row(c2, "checks_only"), E2K)})
+    have_pramr = (Path("outputs/eval/test_pramr") / "summary.md").exists()  # plan 2026-11-22
+    if have_pramr:
+        p1, p2, _ = tables("test_pramr", ["pramr_full"], [0, 1, 2], recovery=("pramr_full",))
+        base.append({"method": names["pramr_full"], **pick(row(p1, "pramr_full"), E1K),
+                     **pick(row(p2, "pramr_full"), E2K)})
+    if have_checks or have_pramr:
         out["main_with_checks_only"] = base
-        lines += ["## S1 Test E1/E2 with the checks-only baseline (mean ± std over 3 seeds)", "",
+        lines += ["## S1 Test E1/E2 with the checks-only and PRAM-R baselines (mean ± std over 3 seeds)", "",
                   markdown_table(base, ["method", *E1K, *E2K]), ""]
 
     specs = [RunSpec("test", sc, f, s) for s in (0, 1, 2) for f in FAULTS for sc in TEST_SCENES]
@@ -293,6 +299,9 @@ def step1_tables(summary: dict) -> tuple[dict, list[str]]:
     if have_checks:
         runs.append((load_records(Path("outputs/eval/test_checks_only"), specs), None))
         methods.append("checks_only")
+    if have_pramr:
+        runs.append((load_records(Path("outputs/eval/test_pramr"), specs), None))
+        methods.append("pramr_full")
     recs = [r for r in merge_runs([([r for r in rs if "error" not in r], p) for rs, p in runs])]
     diff = [{**r, "method": names[r["method"]]} for r in difficulty_table(recs, methods)]
     out["difficulty"] = diff
@@ -304,12 +313,14 @@ def step1_tables(summary: dict) -> tuple[dict, list[str]]:
     if have_checks:
         view = sensor_fault_view(recs)
         sf = [{"method": names[m], **e1_counts(method_frames(view, m))} for m in methods]
-        diff_rows = [r for r in bootstrap_metrics(view, ["ours_full", "checks_only"], "ours_full")
-                     if r["method"] == "ours_full - checks_only" and r["metric"] in ("F1", "sensor_acc", "false_alarm")]
+        compared = ["ours_full", *[m for m in ("checks_only", "pramr_full") if m in methods]]
+        diff_rows = [r for r in bootstrap_metrics(view, compared, "ours_full")
+                     if r["method"].startswith("ours_full - ") and r["metric"] in ("F1", "sensor_acc", "false_alarm")]
         out["sensor_faults_only"] = {"e1": sf, "ours_full_minus_checks_only": diff_rows}
         lines += ["## S5 Sensor faults only (agent-fault frames removed; clean frames kept; seeds pooled)", "",
-                  ("Agent faults are failures of the VLM itself; a monitor without a VLM cannot have them, so they are "
-                   "left out when Ours is compared with the rules alone."), "",
+                  ("Agent faults are failures of the VLM itself; a monitor without a VLM cannot have them, and "
+                   "PRAM-R has no re-ask, so they are left out when Ours is compared with the rules alone and with "
+                   "PRAM-R."), "",
                   markdown_table(sf, ["method", "n", "n_fault", "P", "R", "F1", "sensor_acc", "false_alarm"]), "",
                   markdown_table(diff_rows, ["method", "metric", "point", "lo", "hi"]), ""]
 

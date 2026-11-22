@@ -50,6 +50,9 @@ records its commit in its JSON or `meta.json`.
 
 | Result | Path | Commit | Source |
 |---|---|---|---|
+| PRAM-R-style baseline, dev screen (2 settings, seed 0, 7 sensor faults) | `eval/dev_pramr_s0/` (+ `pramr_tune.{md,json}`) | `88c3775` | Recorded. Flags identical to `vlm_screen_s0` on 1701/1701 frames; replay of the thresholds exact on 1701/1701. |
+| PRAM-R-style, frozen setting on dev | `eval/dev_pramr_s0_frozen/` | `aaef26f` | Recorded. All 1701 answers from the cache; metrics equal the chosen tuning row. |
+| **PRAM-R-style baseline on the test split** (3 seeds, all faults) | `eval/test_pramr/` | `aaef26f` | Recorded. Flags identical to `test_final` on 4830/4830 frames; replay exact 4830/4830. The process was killed once at 102/120 runs (no error in the log) and resumed under the same tag and commit; the 18 partial runs restarted from frame 0 with cached answers. vLLM: the CUDA 12 build of 2026-11-21 (`test_final` used the CUDA 13 build of the same versions). Reference ranges: `configs/pramr_reference.yaml` (`88c3775`). |
 | R1–R6 on the logged runs (test split, E3) and Clopper–Pearson bounds | `report_figures/requirements.{md,json}` (repo root, not tracked) | `38707da` | Recorded. Reads `eval/test_final`, `eval/test_checks_only`, `e3/e3_final`. |
 | Shield and controller verification (S1–S7, C1–C6) | `report_figures/formal.{md,json}` | `3c3f707` | Recorded. |
 | nuScenes falsification, CPU faults (C1, C4, L1, L2, L4; 2,400 trials, checks-only, dev) | `falsify/nuscenes_cpu_v1/` | `fbd56ff` | Recorded (`meta.json`, `summary.md`). |
