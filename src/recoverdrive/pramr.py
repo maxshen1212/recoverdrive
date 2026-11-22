@@ -41,11 +41,13 @@ MIN_RANGE_M, MAX_RANGE_M = 2.0, 50.0
 N_CELLS = math.pi * (MAX_RANGE_M**2 - MIN_RANGE_M**2)  # 1 m^2 cells in the 2-50 m annulus
 NOISE_RADIUS_M = 0.5
 
-# Frozen after dev tuning (plan step 8-9). Thresholds are in thousandths so that replay and live runs agree exactly.
-SCENE_IMAGE = False
-THETA_CAMERA = 500
-THETA_LIDAR = 500
-DELTA = 0
+# Frozen after dev tuning (plan steps 8-9; outputs/eval/dev_pramr_s0/pramr_tune.md): the mosaic as scene context,
+# best dev F1 (0.352) among settings with a false-alarm rate <= 0.10 (the text-only setting never got below 0.11).
+# Thresholds are in thousandths so that replay and live runs agree exactly.
+SCENE_IMAGE = True
+THETA_CAMERA = 400
+THETA_LIDAR = 750
+DELTA = 50
 MAX_TOKENS = 384
 
 INTERPRETATION = {  # the paper's Table I, "contextual indicators" and their interpretation
