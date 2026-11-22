@@ -10,6 +10,7 @@ from typing import ClassVar
 import numpy as np
 from PIL import Image
 
+from recoverdrive import pramr
 from recoverdrive.agent import AgentCaller, Attempt
 from recoverdrive.checks import CheckOutput, flagged_sensors, rank_sensors
 from recoverdrive.faults import AGENT_FAULTS, AgentFaultState
@@ -372,6 +373,63 @@ class ImageFlagChecks:
                                                     n_calls=1, latency_s=att.latency_s, extra=extra)}
 
 
+class PramR:
+    """PRAM-R-style baseline (arXiv 2603.04222), one reliability score per sensor (plan 2026-11-22, src/recoverdrive/
+    pramr.py). Indicators -> one router call per frame -> threshold with hysteresis -> switched-off sensors are
+    isolated -> rule-based shield. No re-ask, vote or verification (the paper has none): an invalid or late answer
+    keeps the previous state and raises no alarm. Names: pramr_text_full / pramr_image_full (dev comparison of the
+    scene context) and pramr_full (the frozen choice, pramr.SCENE_IMAGE)."""
+
+    NAMES: ClassVar[tuple[str, ...]] = ("pramr_text_full", "pramr_image_full", "pramr_full")
+
+    def __init__(self, name: str, client: VLMClient, cfg: dict, reference: dict | None = None,
+                 theta_camera: int = pramr.THETA_CAMERA, theta_lidar: int = pramr.THETA_LIDAR, delta: int = pramr.DELTA):
+        self.name, self.names = name, (name,)
+        self.image = {"pramr_text_full": False, "pramr_image_full": True, "pramr_full": pramr.SCENE_IMAGE}[name]
+        self.caller = AgentCaller(client)
+        self.reference = reference  # loaded from configs/pramr_reference.yaml at the first step when None
+        self.params = {"theta_camera": theta_camera, "theta_lidar": theta_lidar, "delta": delta,
+                       "scene_image": self.image}
+        self.active: dict[str, bool] | None = None
+        self.prev_indicators: dict | None = None
+        self.prev_scores: dict[str, float] | None = None
+        self.last_scores: dict[str, float] | None = None
+
+    def _latch(self, active: dict[str, bool], scores: dict[str, float] | None) -> dict[str, bool]:
+        p = self.params
+        return pramr.latch_step(active, scores, p["theta_camera"], p["theta_lidar"], p["delta"])
+
+    def step(self, ctx: FrameContext) -> dict[str, MethodOutput]:
+        self.caller.new_frame(ctx.agent_fault)
+        cams = [s.split(":", 1)[1] for s in ctx.sensors if s.startswith("camera:")]
+        keys = pramr.sensor_keys(cams)
+        if self.active is None:
+            self.active = dict.fromkeys(keys, True)  # every run starts with all sensors on
+        if self.reference is None:
+            self.reference = pramr.load_reference()
+        indicators = pramr.frame_indicators(ctx.frame, cams, self.reference)
+        msgs = pramr.pramr_messages(cams, indicators, self.reference, self.prev_indicators, self.prev_scores,
+                                    ctx.mosaic if self.image else None)
+        att = self.caller.call(msgs, pramr.pramr_schema(cams), max_tokens=pramr.MAX_TOKENS, name="pramr")
+        scores = pramr.scores_of(att.data, cams)
+        clean = pramr.scores_of(att.clean_data, cams) if att.clean_data is not None else None
+        before = dict(self.active)
+        self.active = self._latch(before, scores)
+        if scores is not None:
+            self.last_scores = scores
+        isolated, pred = pramr.outcome(self.active, self.last_scores, keys)
+        result = RecoveryResult(["pramr"], "degraded" if isolated else "healthy", isolated, None)
+        extra: dict = {"attempts": [attempt_record(att)], "scores": scores, "clean_scores": clean,
+                       "indicators": indicators, "active_before": before, "active_after": dict(self.active),
+                       "params": self.params}
+        if ctx.agent_fault is not None:  # spec §5.2: valid answer whose switching matches the fault-free answer
+            extra["agent_recovered"] = bool(att.valid and clean is not None
+                                            and self.active == self._latch(before, clean))
+        self.prev_indicators, self.prev_scores = indicators, scores
+        return {self.name: MethodOutput(None, att.valid, bool(isolated), pred, recovery=result, action=shield(result),
+                                        n_calls=1, latency_s=att.latency_s, extra=extra)}
+
+
 class B0:
     """No monitor: always continue."""
 
@@ -445,7 +503,8 @@ def build_methods(names: list[str], client: VLMClient | None, cfg: dict) -> list
     """One object per method family; each keeps its own per-run state."""
     methods: list = []
     variant_names = tuple(f"{v}_{k}" for v in VLMVariant.VARIANTS for k in ("detect", "full"))
-    known = ("B0", "B1", "B2", "B3", "ours_detect", "ours_full", "checks_only", "imgflag_checks_full", *variant_names)
+    known = ("B0", "B1", "B2", "B3", "ours_detect", "ours_full", "checks_only", "imgflag_checks_full", *PramR.NAMES,
+             *variant_names)
     unknown = [n for n in names if n not in known]
     if unknown:
         raise ValueError(f"unknown methods: {unknown}")
@@ -455,6 +514,7 @@ def build_methods(names: list[str], client: VLMClient | None, cfg: dict) -> list
         methods.append(ChecksOnly(cfg))
     if "imgflag_checks_full" in names:
         methods.append(ImageFlagChecks(client, cfg))
+    methods += [PramR(n, client, cfg) for n in PramR.NAMES if n in names]
     methods += [TextChain(n, client) for n in ("B1", "B2", "B3") if n in names]
     ours = tuple(n for n in ("ours_detect", "ours_full") if n in names)
     if ours:

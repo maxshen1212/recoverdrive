@@ -88,6 +88,13 @@ def main():
             commit = check_test_allowed(cfg, REPO)
         except RuntimeError as exc:
             sys.exit(str(exc))
+        if any(m.startswith("pramr") for m in args.methods):  # PRAM-R reads its dev reference ranges (plan 2026-11-22)
+            import subprocess
+
+            tracked = subprocess.run(["git", "ls-files", "--error-unmatch", "configs/pramr_reference.yaml"], cwd=REPO,
+                                     capture_output=True, check=False).returncode == 0
+            if not tracked:
+                sys.exit("refusing to run PRAM-R on the test split: configs/pramr_reference.yaml is not committed")
     cfg["ablation"] = args.ablation
     cfg["sequential_methods"] = args.sequential
     for key, val in (("model", args.vlm_model), ("base_url", args.vlm_url), ("max_tokens", args.vlm_max_tokens)):

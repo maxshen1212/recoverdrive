@@ -50,6 +50,17 @@ def flip_verdict(data: dict, sensors: list[str], rng: np.random.Generator) -> di
     return out
 
 
+def flip_reliability(data: dict, rng: np.random.Generator) -> dict:
+    """A2 for per-sensor reliability answers (PRAM-R baseline): one wrong answer, as flip_verdict does for verdicts.
+    If every sensor looks reliable (r >= 0.5), one random sensor gets 1 - r; otherwise every sensor below 0.5 does."""
+    out = dict(data)
+    keys = [k for k in data if k.endswith("_reliability")]
+    low = [k for k in keys if data[k] < 0.5]
+    for k in low or [str(rng.choice(keys))]:
+        out[k] = round(1.0 - float(data[k]), 3)
+    return out
+
+
 class AgentCaller:
     def __init__(self, client: VLMClient):
         self.client = client
@@ -90,9 +101,12 @@ class AgentCaller:
                 raw = self.fault.corrupt_output(raw)
             elif fid == "A2" and clean is not None:
                 props = schema["properties"]
-                sensors = ([v[len("fault:"):] for v in props["verdict"]["enum"] if v.startswith("fault:")]
-                           if "verdict" in props else [s for s in props["sensor"]["enum"] if s != "none"])
                 rng = np.random.default_rng([self.fault.params.get("seed", 0), idx])
-                raw = json.dumps(flip_verdict(clean, sensors, rng))
+                if any(k.endswith("_reliability") for k in props):  # PRAM-R baseline schema (plan 2026-11-22)
+                    raw = json.dumps(flip_reliability(clean, rng))
+                else:
+                    sensors = ([v[len("fault:"):] for v in props["verdict"]["enum"] if v.startswith("fault:")]
+                               if "verdict" in props else [s for s in props["sensor"]["enum"] if s != "none"])
+                    raw = json.dumps(flip_verdict(clean, sensors, rng))
         data = validate_json(raw, schema)
         return Attempt(raw, data, data is not None, False, res.latency_s, res.cached, clean, corrupted=corrupted)

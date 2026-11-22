@@ -313,8 +313,9 @@ class AgentFaultState:
                 data = json.loads(raw)
             except json.JSONDecodeError:
                 return raw[: max(1, len(raw) // 2)]
-            for key in ("verdict", "status", "sensor", "confidence"):
-                data.pop(key, None)
+            removed = [data.pop(key) for key in ("verdict", "status", "sensor", "confidence") if key in data]
+            if not removed and data:  # other schemas (PRAM-R baseline, plan 2026-11-22): drop the first field
+                data.pop(next(iter(data)))
             return json.dumps(data)
         return "Sorry, I cannot help with that request."
 
