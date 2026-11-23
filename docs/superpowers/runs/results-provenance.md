@@ -43,6 +43,8 @@ Every run below records its commit and `dirty: false` in its own `meta.json` / o
 | Bootstrap intervals | `report_figures/bootstrap.{md,json}` (repo root, not tracked) | `3483460` | Recorded in the JSON. |
 | Step 1 tables S1–S5 | `report_figures/tables.md`, key `step1` of `summary.json` | branch head | `scripts/make_figures.py`; old keys unchanged. |
 
+Tag: `results/checks-only-test` (`3483460`).
+
 ### Course requirements, Phase A (2026-11-20, branch `worktree-course-requirements`)
 
 Specs, proofs and CPU-only falsification (plan `docs/superpowers/plans/2026-11-20-course-requirements.md`). Each output
@@ -50,14 +52,13 @@ records its commit in its JSON or `meta.json`.
 
 | Result | Path | Commit | Source |
 |---|---|---|---|
-| PRAM-R-style baseline, dev screen (2 settings, seed 0, 7 sensor faults) | `eval/dev_pramr_s0/` (+ `pramr_tune.{md,json}`) | `88c3775` | Recorded. Flags identical to `vlm_screen_s0` on 1701/1701 frames; replay of the thresholds exact on 1701/1701. |
-| PRAM-R-style, frozen setting on dev | `eval/dev_pramr_s0_frozen/` | `aaef26f` | Recorded. All 1701 answers from the cache; metrics equal the chosen tuning row. |
-| **PRAM-R-style baseline on the test split** (3 seeds, all faults) | `eval/test_pramr/` | `aaef26f` | Recorded. Flags identical to `test_final` on 4830/4830 frames; replay exact 4830/4830. The process was killed once at 102/120 runs (no error in the log) and resumed under the same tag and commit; the 18 partial runs restarted from frame 0 with cached answers. vLLM: the CUDA 12 build of 2026-11-21 (`test_final` used the CUDA 13 build of the same versions). Reference ranges: `configs/pramr_reference.yaml` (`88c3775`). |
 | R1–R6 on the logged runs (test split, E3) and Clopper–Pearson bounds | `report_figures/requirements.{md,json}` (repo root, not tracked) | `38707da` | Recorded. Reads `eval/test_final`, `eval/test_checks_only`, `e3/e3_final`. |
 | Shield and controller verification (S1–S7, C1–C6) | `report_figures/formal.{md,json}` | `3c3f707` | Recorded. |
 | nuScenes falsification, CPU faults (C1, C4, L1, L2, L4; 2,400 trials, checks-only, dev) | `falsify/nuscenes_cpu_v1/` | `fbd56ff` | Recorded (`meta.json`, `summary.md`). |
 | Falsification triage | `falsify/nuscenes_cpu_v1/triage.{md,json}` | `20ebeb8` | Recorded. |
 | Assurance case figure | `docs/media/assurance_case.png` (tracked) | `20ebeb8` | `scripts/make_assurance_figure.py` from the files above. |
+
+Tags: `results/requirements-logs` (`38707da`), `results/formal-proofs` (`3c3f707`), `results/falsification-nuscenes-cpu` (`fbd56ff`).
 
 ### Course requirements, Phase B, and VLM-centric variants (2026-11-21, server gvl2)
 
@@ -73,7 +74,7 @@ SAM 3 and VLM answers are reused. "dirty" below means only run-log files were un
 | CARLA falsification (4 campaigns, 160 runs) | `falsify/carla_v1_{pedestrian,lead_brake}_{random,tpe}/` | started `89d95d7`; resumed `77bfb9f` (pedestrian TPE: `dfd2846`) | Recorded; `meta.json` holds the resume commit and `resumed_trials`. The scenario and run code did not change between these commits. |
 | CARLA replays with Ours-full | `falsify/carla_v1_confirm_{pedestrian,lead_brake}/` | `d3095f1` (dirty), `2b4a032` | Recorded. |
 | E3 regression cell on gvl2 | `e3/regress_gvl2/` in the worktree | `89d95d7` | Recorded. |
-| VLM-centric variants, screening (dev, seed 0, 7 faults) | `eval/vlm_screen_s0/` | `dfd2846` (dirty) | Recorded. Restarted at 04:19 with a second VLM server; finished runs and the cache were reused. |
+| VLM-centric variants, screening (dev, seed 0, 7 faults) | `eval/vlm_screen_s0/` | started `dfd2846` (dirty); restarted on `ad13504` | Recorded; `meta.json` holds `ad13504`. Restarted at 04:19 with a second VLM server; finished runs and the cache were reused. Between the two commits only `think_trust` was added; the screened variants' code is identical. |
 | `think_trust` ablation (same frames) | `eval/vlm_screen_s0_trust/` | `ad13504` | Recorded. |
 | Replays with variants | `falsify/nuscenes_confirm_{cpu,gpu}_v1_{think_trust_full,think_nochecks_full}/` | `df05870` (C1, C4, L1, L2, L4), `648712a` (C2, C3); dirty: docs only | Recorded. |
 | Round 2 of the variants: `perceive_trust`, `imgflag`, `imgflag_checks` (dev, seed 0, 7 faults, same frames) | `eval/vlm_screen_s0_round2/` | `9a55dcb` | Recorded. |
@@ -84,8 +85,22 @@ SAM 3 and VLM answers are reused. "dirty" below means only run-log files were un
 | Figures and tables of this run | `report_figures/results_2026-11-21.{md,json}`, `fig6`–`fig10`; `docs/media/{falsification,vlm_variants,vlm_variants_per_fault,vlm_variants_seeds,vlm_cost,vlm_replays,dataflow,assurance_case}.png` (tracked) | branch head | `scripts/make_results_figures.py`, `make_dataflow_figure.py`, `make_assurance_figure.py` |
 | Demo video | Drive `experiment_result/report_figures_2026-11-21/recoverdrive_demo_c1_pedestrian.mp4` | `c8361ce` | `scripts/make_demo_video.py` from `e3/demo/` |
 
+Tags: `results/falsification-nuscenes-gpu` (`89d95d7`), `results/falsification-carla` (`77bfb9f`, the resume commit in `meta.json`), `results/vlm-variants-round1` (`ad13504`), `results/vlm-variants-round2` (`9a55dcb`), `results/vlm-imgflag` (`47b6f2b`).
+
 Later commits (`528b367..14d3024`) changed only documentation, comments, the model download script, the CARLA
 launcher, and demo recording in `run_e3.py`. No change affects any number above.
+
+### PRAM-R-style baseline (2026-11-22, branch `pramr-baseline`)
+
+Run log `docs/superpowers/runs/2026-11-22-pramr-baseline.md`. Server gvl2, CUDA 12 vLLM build (`test_final` used the CUDA 13 build of the same versions). The thresholds were tuned on dev only and frozen in `aaef26f` before the single test run.
+
+| Result | Path (under `outputs/`) | Commit | Source |
+|---|---|---|---|
+| PRAM-R-style baseline, dev screen (2 settings, seed 0, 7 sensor faults) | `eval/dev_pramr_s0/` (+ `pramr_tune.{md,json}`) | `88c3775` | Recorded. Flags identical to `vlm_screen_s0` on 1701/1701 frames; replay of the thresholds exact on 1701/1701. |
+| PRAM-R-style, frozen setting on dev | `eval/dev_pramr_s0_frozen/` | `aaef26f` | Recorded. All 1701 answers from the cache; metrics equal the chosen tuning row. |
+| **PRAM-R-style baseline on the test split** (3 seeds, all faults) | `eval/test_pramr/` | `aaef26f` | Recorded. Flags identical to `test_final` on 4830/4830 frames; replay exact 4830/4830. The process was killed once at 102/120 runs (no error in the log) and resumed under the same tag and commit; the 18 partial runs restarted from frame 0 with cached answers. vLLM: the CUDA 12 build of 2026-11-21 (`test_final` used the CUDA 13 build of the same versions). Reference ranges: `configs/pramr_reference.yaml` (`88c3775`). |
+
+Tag: `results/pramr-test` (`aaef26f`).
 
 ## Notes
 
