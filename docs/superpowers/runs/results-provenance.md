@@ -3,10 +3,18 @@
 Which commit produced each reported result. `REPORT.md` and `outputs/` are not tracked; a verified backup of them
 (with this file and a `git bundle` of the repo) is on the lab server at
 `/data/maxshen/backups/recoverdrive/2026-11-15/` (`recoverdrive-results-2026-11-15.tar.gz`, checksum in `SHA256SUMS`).
-Each result commit also has an annotated tag `results/*` (last column).
+Each result commit also has an annotated tag `results/*` (last column of the first table; listed below each later table).
 
 - HEAD when the backup was made: `14d3024dc528f69d54f147ce9e9c72bd3f039157`
-- All experiments ran on 2026-11-03 (server-local time) on the shared lab server (4 x RTX 6000 Ada).
+- The main experiments ran on 2026-11-03 and the Step 1 runs on 2026-11-15 (server-local time) on the shared lab server
+  (4 x RTX 6000 Ada). The course-requirement and VLM-variant runs ran on 2026-11-20 and 2026-11-21; their GPU parts ran
+  on a second lab server (gvl2, 8 x RTX 6000 Ada), as did the PRAM-R-style baseline.
+- Results on Google Drive (`experiment_result/`): `recoverdrive_outputs_2026-11-04.zip` holds everything up to 2026-11-04,
+  and `recoverdrive_outputs_step1_2026-11-15.zip` adds the Step 1 results below. Unzip both at the repository root, the
+  2026-11-04 archive first. The eight `recoverdrive_results_2026-11-21_*.zip` files add the course-requirement and
+  VLM-variant results: two summary archives, one per round (summaries, trial lists, triage and replays), and six
+  archives with the per-frame logs of the variant runs. The per-trial step logs of the falsification (129 MB) stay on
+  the lab server.
 
 ## Which commit produced which result
 
@@ -29,6 +37,9 @@ and the git log, and the note says how sure that is.
 | Report figures and tables | `report_figures/` (repo root, not tracked) | `make_figures.py` as of `2b86d90` | Inferred. Written 23:27. Later commits changed only a docstring in `make_figures.py`. | - |
 | `REPORT.md` | (repo root, not tracked) | text written at the P5-T6 checkpoint `528b367afbcf6133ad69e912e6cc2ea2cb59468a` | Last edited 23:57 on HEAD `14d3024`. | - |
 | CARLA demo GIFs | `e3/demo/` (copies tracked in `docs/media/`) | `529fcf6` | From the git log. | - |
+
+Later commits (`528b367..14d3024`) changed only documentation, comments, the model download script, the CARLA
+launcher, and demo recording in `run_e3.py`. No change affects any number above.
 
 ### Step 1 results (2026-11-15, branch `step1-report-completeness`)
 
@@ -86,9 +97,6 @@ SAM 3 and VLM answers are reused. "dirty" below means only run-log files were un
 | Demo video | Drive `experiment_result/report_figures_2026-11-21/recoverdrive_demo_c1_pedestrian.mp4` | `c8361ce` | `scripts/make_demo_video.py` from `e3/demo/` |
 
 Tags: `results/falsification-nuscenes-gpu` (`89d95d7`), `results/falsification-carla` (`77bfb9f`, the resume commit in `meta.json`), `results/vlm-variants-round1` (`ad13504`), `results/vlm-variants-round2` (`9a55dcb`), `results/vlm-imgflag` (`47b6f2b`).
-
-Later commits (`528b367..14d3024`) changed only documentation, comments, the model download script, the CARLA
-launcher, and demo recording in `run_e3.py`. No change affects any number above.
 
 ### PRAM-R-style baseline (2026-11-22, branch `pramr-baseline`)
 
