@@ -17,7 +17,8 @@ Codes such as E1 or C1 are explained in the glossary at the end.
 - **Small test set.** The test split has 4 scenes. Two of them (scene-0757 and scene-1094) are in the nuScenes
   *train* split.
 - **Unequal tuning.** Our prompt and thresholds were tuned on the dev scenes; the DriveAgent-style baselines were not.
-- **No rules-only baseline.** We cannot yet say how much the VLM adds over the deterministic checks alone.
+- **The VLM adds little over the rules.** A rules-only (checks-only) baseline, added in Step 1, matches Ours-full on
+  sensor faults (see Step 1).
 - **Fixed thresholds.** One global threshold per check, although camera/LiDAR agreement depends on distance and
   object class (see `docs/related-work.md`).
 - **Small closed loop.** E3 uses one fault type (C1), four routes and 12 runs per cell.
@@ -31,7 +32,7 @@ Codes such as E1 or C1 are explained in the glossary at the end.
   fallback quality of its own.**
 - Bootstrap: every Ours-full − B1/B2/B3 interval excludes 0 (F1 +0.15 to +0.18; false alarm −0.23 to −0.73).
 - Easy vs. hard: on hard faults B3 names the right sensor 23 % of the time, Ours-full 79 %, checks-only 88 %.
-- 4B + VLM gate: the same fallback quality as 8B (F1 0.601, unnecessary 0.065, missed 0.053) at 1.9 s per frame
+- 4B + VLM gate: the same results as 8B + VLM gate (F1 0.601, unnecessary 0.065, missed 0.053) at 1.9 s per frame
   (8B 3.6 s, 8B + gate 2.4 s, test-weighted).
 
 **What this changes for the paper.** The finding "evidence matters more than model size" now reads "the
@@ -61,7 +62,7 @@ Cheap and mostly offline: these reuse the logs of the existing runs.
 | Confidence intervals | Bootstrap over fault episodes (4 scenes are too few to bootstrap over scenes); compare Ours-full with B3. | Is the gap stable or luck? |
 | 4B model + VLM gate | Replay the gate on the logged 4B answers; time one short 4B run. | Can the monitor get close to real time (about 1–2 s per frame)? |
 
-Also: make the E3 and E4 scripts record the git commit, as `run_eval.py` already does.
+Also done (2026-11-15): the E3 and E4 scripts now record the git commit, as `run_eval.py` does.
 
 ## Step 2: make the comparison fair
 
@@ -130,8 +131,8 @@ limitation is the fallback, and a workshop is the more realistic venue.
 
 | When | What |
 |---|---|
-| Nov 15 – Nov 27, 2026 | Step 1 |
-| Dec 1 – Dec 10, 2026 | Course presentation and report; start Step 2 with the classifier and B1–B3 with check numbers |
+| Nov 15 – Nov 24, 2026 | Step 1 (done Nov 15); course requirements and VLM-centric variants (done Nov 20–21); PRAM-R-style baseline (done Nov 22); slides and demo (done) |
+| Dec 1 – Dec 10, 2026 | Course presentation (Dec 1) and final report (Dec 10); start Step 2 with the classifier and B1–B3 with check numbers |
 | Dec 11, 2026 – Jan 31, 2027 | Rest of Step 2; set up the new scenes and CenterPoint |
 | Feb 1 – Feb 15, 2027 | Step 3 experiments; run the new test split once |
 | Feb 15 – Mar 1, 2027 | Write the paper |
@@ -148,7 +149,7 @@ cross-model study are the experiments this claim depends on most.
 | Group | Codes |
 |---|---|
 | Experiments | E0 pilot, E1 detection accuracy, E2 fallback quality, E3 CARLA closed loop, E4 latency, E5 ablation |
-| Methods | B0 no monitor; B1 / B2 / B3 DriveAgent-style text chain (zero-shot / chain-of-thought / self-refine); Ours-detect (first VLM answer, no recovery); Ours-full (with recovery) |
+| Methods | B0 no monitor; B1 / B2 / B3 DriveAgent-style text chain (zero-shot / chain-of-thought / self-refine); Ours-detect (first VLM answer, no recovery); Ours-full (with recovery); checks-only (Ours-full without the VLM); PRAM-R-style (the VLM scores each sensor from per-sensor quality indicators) |
 | Camera faults | C1 front camera shows the rear view, C2 misalignment, C3 degraded image, C4 frozen image |
 | LiDAR faults | L1 point dropout, L2 calibration shift, L3 ghost objects (not evaluated), L4 total failure |
 | Agent faults | A1 corrupted output, A2 wrong answer, A3 timeout |

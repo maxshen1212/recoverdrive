@@ -1,7 +1,19 @@
 # RecoverDrive 設計文件
 
-> 狀態：設計已在對話中逐段確認，待審閱
+> 狀態：設計已在對話中逐段確認，並已實作完成（2026-11-24）。以下正文保留原始設計；實作與原設計的差異列在「實作差異」。
 > 範圍：整體方法、實驗設計、各階段計畫（不含日期與分工）
+
+> **實作差異（2026-11-24 補記，正文未改）**
+> - §1.2：在 sensor 故障上，checks-only（不用 VLM）與 Ours-full 的 F1 相同（都是 0.714）；VLM 的增益只出現在 agent 故障。
+> - §1.6、§8.1：後來另外使用 gvl2（8 張 GPU，driver 565）；兩台伺服器都改用 CUDA 12 build。
+> - §2.2、§4.2：VLM 輸出欄位是 `verdict`（`ok` / `uncertain` / `fault:<sensor>`），不是 `status` + `sensor`。「只在 flag 時呼叫 VLM」的 gate 只做為 ablation（F1 降到 0.601）。
+> - §3.2：L3（ghost objects）沒有實作。
+> - §3.4：CARLA 的 ego 車用自寫的 lane-keeping 與速度控制（D11），不用 autopilot；只監控 2 台相機（Town01_Opt）。
+> - §4.3：沒有加入「重新觀察相鄰相機」。
+> - §5.1：另外加了 checks-only、PRAM-R-style 兩個 baseline（事後加入，各自只跑一次 test split）與 9 個 VLM-centric 變體（只在 dev split）。checks-only 不用 Qwen3-VL-8B。
+> - §5.3 E5：沒有跑 32B 和 LoRA；Thinking 只跑 seed 0。
+> - §5.4：「test split 只跑一次」適用於凍結的主實驗；之後的 baseline 與 ablation 是另外核准的 test run。
+> - §5.3、§6：課程要求的部分（R1–R6 的 STL 需求、shield 與 controller 的證明、falsification、assurance case）不在本 spec，見 `docs/requirements-and-verification.md`。
 
 ## 1. 目標與背景
 

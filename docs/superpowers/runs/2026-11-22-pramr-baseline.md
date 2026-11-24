@@ -14,9 +14,9 @@ Done. Results in `REPORT.md` §4.2 (local) and the report Doc; numbers in `repor
 | 5 reference ranges | 88c3775 | 243 clean dev keyframes | 78.2 % of clean frames have at least one indicator outside p5-p95 (recorded, not tuned) |
 | 6 smoke | - | `smoke_pramr`: 78 frames, 0 errors, 0 invalid answers | |
 | 7 dev screen | - | `dev_pramr_s0`: 42 runs, 1701 frames, 0 errors, 0 invalid; flags identical to `vlm_screen_s0`; replay 1701/1701 | |
-| 8-9 tuning and freeze | aaef26f | rule fixed in the plan: highest F1 with false alarm <= 0.10; chosen: mosaic, theta_cam 400, theta_lidar 750, delta 50 (dev F1 0.352, FA 0.095); `dev_pramr_s0_frozen` all cached, identical metrics | text-only never below FA 0.11 |
+| 8-9 tuning and freeze | aaef26f | rule fixed in the plan: highest F1 with false alarm <= 0.10; chosen: mosaic, theta_cam 400, theta_lidar 750, delta 50 (in thousandths: 0.40, 0.75, 0.05; dev F1 0.352, FA 0.095); `dev_pramr_s0_frozen` all cached, identical metrics | text-only never below FA 0.11 |
 | 10 test run | aaef26f (clean tree) | `test_pramr`: 120 runs, 4830 frames, 0 errors; flags identical to `test_final` 4830/4830; replay 4830/4830 | killed once at 102/120 runs with no error in the log; resumed under the same tag and commit (finished runs kept, 18 partial runs restarted from frame 0 with cached answers) |
-| 11 report | (this commit) | bootstrap: 55/55 existing rows unchanged, 10 new; `tables.md` sections before S1 unchanged | |
+| 11 report | ace0dba | bootstrap: 55/55 existing rows unchanged, 10 new; `tables.md` sections before S1 unchanged | |
 
 ## Results (test)
 - All faults, mean ± std over 3 seeds: PRAM-R F1 0.344 ± 0.020 (Ours-full 0.765), false alarm 0.116 (0.121), missed

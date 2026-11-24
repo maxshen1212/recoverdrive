@@ -81,10 +81,11 @@ src/recoverdrive/   pipeline package: checks, faults, VLM client, recovery, shie
   adapters/         nuScenes and CARLA → Frame
   detectors/        SAM 3 (default) and Qwen3-VL grounding (ablation)
 scripts/            entry points (run_eval.py, run_e3.py, ...) and setup helpers (env.sh, download_*.sh, serve_vlm.sh)
-configs/            eval.yaml (frozen settings), splits.yaml (dev/test scenes), e3.yaml (CARLA overrides)
+configs/            eval.yaml (frozen settings), splits.yaml (dev/test scenes), e3.yaml (CARLA overrides),
+                    e0.yaml (pilot), pramr_reference.yaml (PRAM-R-style indicator ranges)
 serving/            separate uv project that only holds vLLM
 tests/              unit tests (pytest)
-docs/media/         demo GIFs and the architecture diagram
+docs/media/         demo GIFs, the architecture and data-flow diagrams, result figures
 docs/related-work.md  related-work survey (2025–2026)
 docs/experiments.md   variables of every experiment (changed, fixed, measured)
 docs/vlm-variants.md  VLM-centric variants of the diagnosis agent and their results
@@ -163,7 +164,7 @@ uv run python scripts/run_eval.py --split test --faults all \
 - Runs are resumable: rerun the same command to finish missing runs.
 - For a second server, start another one with `VLM_PORT=8001` on another GPU; servers that are not running are skipped.
 
-**4. Stop the server** when done: `pkill -INT -f "[v]llm serve"`
+**4. Stop the server** when done: `pkill -INT -u "$USER" -f "[v]llm serve"`
 
 ## Closed-loop experiment in CARLA (optional, E3)
 
@@ -173,7 +174,7 @@ mkdir -p ~/carla/CARLA_0.9.16 && tar xzf CARLA_0.9.16.tar.gz -C ~/carla/CARLA_0.
 CARLA_ROOT=~/carla/CARLA_0.9.16 ./scripts/carla_server.sh > carla.log 2>&1 &              # headless, ~5 GB GPU
 sleep 30                                                                                  # see the note below
 uv run python scripts/run_e3.py --seeds 0 1 2 --tag e3_final                              # VLM server must be running
-pkill -INT -f "[C]arlaUE4-Linux-Shipping"
+pkill -INT -u "$USER" -f "[C]arlaUE4-Linux-Shipping"
 ```
 
 Wait about 30 s after starting the server before any client connects (`run_e3.py`, `falsify_carla.py`). On the

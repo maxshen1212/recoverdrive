@@ -45,8 +45,8 @@ Phase B state found at the start (outputs in `/data/maxshen/recoverdrive/outputs
 | T13 | e315700 | `vlm_agent_s0`: 729 frames, 0 errors; 181 passed, ruff clean | recovery 0.661 Ours-full, 0.622 `think_trust`, 0.661 `imgflag`; unnecessary fallback 0.056 / 0.089 / 0.154 |
 | T11 | 67f9493 | `vlm_screen_s0_round2`: 42 runs, 1,701 frames, 0 errors; bootstrap vs Ours-full | `perceive_trust` F1 0.617 (gap +0.109 [+0.070, +0.149]); `imgflag` 0.726 (−0.001 [−0.028, +0.025]) with false alarm 0.246 vs 0.089; `imgflag_checks` 0.723 at 1 call/frame |
 | T14 | e0a5990 | `carla_v2_imgflag_{r4,r4_ped,r5}`: 12 replays, all finished (the cut-off duplicate of the main R4 process is kept as `pedestrian_confirm.partial-20261121T0805`) | front camera isolated 0/153 fault steps; rear camera isolated on 65/308 clean steps ("frozen"); R4 3/10 coincidental fixes, 1 new violation; collision unchanged |
-| T12 | (this commit) | `vlm_trust_s12`, `vlm_imgflag_s12`: 84 runs and 3,402 frames each, 0 frame errors; figures regenerated | 3 seeds: F1 0.729 ± 0.003 Ours-full, 0.726 ± 0.005 `think_trust`, 0.727 ± 0.002 `imgflag`, 0.726 ± 0.003 `imgflag_checks`; dataflow diagram lists the round-2 variants |
-| T15 | (this commit) | report Doc read back and PDF export checked; provenance Doc read back; Drive file sizes match; 181 passed, ruff clean | merged into `main` by fast-forward and pushed with this commit |
+| T12 | 6459ea8 | `vlm_trust_s12`, `vlm_imgflag_s12`: 84 runs and 3,402 frames each, 0 frame errors; figures regenerated | 3 seeds: F1 0.729 ± 0.003 Ours-full, 0.726 ± 0.005 `think_trust`, 0.727 ± 0.002 `imgflag`, 0.726 ± 0.003 `imgflag_checks`; dataflow diagram lists the round-2 variants |
+| T15 | 387ea3f | report Doc read back and PDF export checked; provenance Doc read back; Drive file sizes match; 181 passed, ruff clean | merged into `main` by fast-forward and pushed with this commit |
 
 ## Drive
 - Report Doc `1TejQjwoDeW_gQMlVCWMl-G1R87ICXqNJk1hCnP4fHA8`, updated in place (title unchanged).

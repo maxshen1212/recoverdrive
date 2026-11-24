@@ -6,4 +6,4 @@ overrides:
     base_url: [http://127.0.0.1:8002/v1]  # a server of its own, so E3 does not compete with the E1/E2 runs
   data:
     cameras: [CAM_FRONT, CAM_BACK]
-    nominal_lidar_points: 34000  # 32-beam ray-cast LiDAR at 400k points/s, 10 Hz (checked in the T12 smoke run)
+    nominal_lidar_points: 34000  # 32-beam ray-cast LiDAR at 400k points/s, 10 Hz (checked in the smoke runs of task T12, Phase 1-4 plan)

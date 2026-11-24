@@ -6,12 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 RecoverDrive is a course term project. It builds a fault-aware monitor for autonomous driving that runs detect → diagnose → recover → verify → fallback. The presentation is due Dec 1, 2026 and the final report Dec 10, 2026.
 
-Phases 0–5 are done: the full detect → diagnose → recover → verify → fallback pipeline, baselines B0–B3, the nuScenes evaluation (E1/E2, test split run once from frozen commit `5d5283c`), CARLA closed loop (E3), latency (E4) and ablation (E5). Results are in the report Google Doc (the local `REPORT.md` was deleted on 2026-11-24; numbers come from `report_figures/`). Phase 6 (slides, demo video) remains. The plan toward a paper (three steps: complete the report, fair baselines, paper-level experiments) is in `FutureWork.md`.
+Phases 0–6 are done: the full detect → diagnose → recover → verify → fallback pipeline, baselines B0–B3, the nuScenes evaluation (E1/E2, test split run once from frozen commit `5d5283c`), CARLA closed loop (E3), latency (E4), ablation (E5), and Phase 6 (a 12-slide Google Slides deck; demo GIFs in `docs/media/` and an MP4 on Google Drive). Later work, also done: the checks-only baseline (2026-11-15); STL requirements R1–R6, exhaustive verification of the shield and recovery controller, falsification and the VLM-centric variants (2026-11-20/21, see `docs/requirements-and-verification.md` and `docs/vlm-variants.md`); and the PRAM-R-style baseline (2026-11-22, test run once from `aaef26f`). Results are in the report Google Doc ("RecoverDrive: Fault-Aware Perception Monitoring with Recovery and Safe Fallback"; the local `REPORT.md` was deleted on 2026-11-24; numbers come from `report_figures/`). Which commit produced each result, and the reproduce commands, are in `docs/superpowers/runs/results-provenance.md`. The plan toward a paper (three steps: complete the report, fair baselines, paper-level experiments) is in `FutureWork.md`.
 
 | Path | What it is |
 |---|---|
 | `REQUIREMENT.md` | The course's class-project requirements (formal requirements, test generation/falsification, formal reasoning, assurance strategy) and what earns a low or high grade. Check plans and the report against it. |
-| `docs/superpowers/specs/2026-11-03-recoverdrive-design.md` | Design spec, written in Traditional Chinese. Source of truth for architecture, fault list, metrics, experiments (E0–E5), and phase plan. Status: pending review. |
+| `docs/superpowers/specs/2026-11-03-recoverdrive-design.md` | Design spec, written in Traditional Chinese. Source of truth for architecture, fault list, metrics, experiments (E0–E5), and phase plan. Implemented; differences from the implementation are listed at its top (2026-11-24). |
 | `src/recoverdrive/` | The pipeline package (layout below). |
 | `configs/` | `splits.yaml` (fixed dev/test scene split) and per-experiment configs such as `e0.yaml`. |
 | `scripts/` | Shell helpers and experiment entry points. |
@@ -20,7 +20,7 @@ Phases 0–5 are done: the full detect → diagnose → recover → verify → f
 | `project_proposal.tex` / `.pdf` | Local only (not tracked). Course proposal. The `.tex` is a fragment with no `\documentclass` or preamble, so it does not compile on its own. |
 | `2505.02123v1.pdf` | Local only (not tracked). The DriveAgent paper this project starts from: https://arxiv.org/abs/2505.02123 |
 
-The repo (github.com/maxshen1212/recoverdrive, **public**, MIT license; DriveAgent prompt notice in `THIRD_PARTY_NOTICES.md`) tracks code, configs, `docs/` (design spec, plans, run logs, related-work survey, results provenance). Commits use the GitHub noreply e-mail (repo-local `git config user.email`); do not commit secrets or personal data. `outputs/`, `report_figures/`, `data/`, and the PDFs/`.tex` are gitignored and exist only on this server.
+The repo (github.com/maxshen1212/recoverdrive, **public**, MIT license; DriveAgent prompt notice in `THIRD_PARTY_NOTICES.md`) tracks code, configs, `docs/` (design spec, plans, run logs, related-work survey, results provenance, requirements and verification, experiment variables, VLM variants, figures and demo GIFs in `docs/media/`). Commits use the GitHub noreply e-mail (repo-local `git config user.email`); do not commit secrets or personal data. `outputs/`, `report_figures/`, `data/`, and the PDFs/`.tex` are gitignored and exist only on this server; result archives are on Google Drive (folder `experiment_result`).
 
 ## Commands
 
@@ -63,9 +63,10 @@ Unattended runs (`/goal`) follow the project skill `.claude/skills/autonomous-ru
 - `pipeline.py`: `DetectDiagnosePipeline.step` runs one frame and records per-component latency.
 - `build.py`: builds the components from a YAML config.
 - `recording.py`: JSONL logs, Rerun output, and overlay PNGs.
-- `cache.py` (SQLite cache for SAM 3 and VLM results), `render.py` (camera mosaic, LiDAR top view), `agent.py` (diagnosis-call wrapper with agent-fault injection), `recovery.py` (re-ask, vote, re-observe, isolate, verify), `shield.py` (rule-based actions and the acceptable-action labels), `methods.py` (B0–B3, Ours-detect, Ours-full), `metrics.py` (E1/E2), `runner.py` (parallel, resumable evaluation runs), `detectors/qwen_grounding.py` (E5 ablation), `adapters/carla_adapter.py` (CARLA → `Frame`).
+- `cache.py` (SQLite cache for SAM 3 and VLM results), `render.py` (camera mosaic, LiDAR top view), `agent.py` (diagnosis-call wrapper with agent-fault injection), `recovery.py` (re-ask, vote, re-observe, isolate, verify), `shield.py` (rule-based actions and the acceptable-action labels), `methods.py` (B0–B3, Ours-detect, Ours-full, checks-only, PRAM-R-style, VLM-centric variants), `pramr.py` (PRAM-R-style indicators and router), `metrics.py` (E1/E2), `runner.py` (parallel, resumable evaluation runs), `detectors/qwen_grounding.py` (E5 ablation), `adapters/carla_adapter.py` (CARLA → `Frame`).
+- Verification: `stl.py` (Signal Temporal Logic (STL) robustness), `requirements.py` (R1–R6 and trace builders), `bounds.py` (Clopper–Pearson bounds), `formal.py` (exhaustive checks of shield properties SH1–SH7 and controller properties RC1–RC6), `falsify.py` (nuScenes falsification), `scenario.py` (CARLA scenarios), `bootstrap.py` (block bootstrap intervals).
 - `pipeline.py` and `build.py` serve the E0 scripts only.
-- Scripts: `run_eval.py` (E1/E2 and the online ablations), `calibrate.py`, `run_e3.py` + `carla_server.sh` (CARLA), `latency_report.py` (E4), `replay_ablation.py` (offline E5 ablations), `make_figures.py` (report figures/tables).
+- Scripts: `run_eval.py` (E1/E2 and the online ablations), `calibrate.py`, `run_e3.py` + `carla_server.sh` (CARLA), `latency_report.py` (E4), `replay_ablation.py` (offline E5 ablations), `make_figures.py` (report figures/tables), `bootstrap_ci.py`, `check_requirements.py`, `verify_logic.py`, `falsify_nuscenes.py`, `falsify_carla.py`, `triage_falsification.py`, `pramr_reference.py`, `pramr_tune.py`, `compare_flags.py`, `make_results_figures.py` and the other `make_*` figure, GIF and video scripts.
 
 ## DriveAgent (upstream reference)
 

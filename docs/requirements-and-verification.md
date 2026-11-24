@@ -20,14 +20,14 @@ Labels (renamed on 2026-11-24 so that no prefix is used twice; older outputs use
 | AS1–AS4 | Assumptions under which the requirements are stated |
 | SH1–SH7 | Proven or refuted properties of the safety shield |
 | RC1–RC6 | Proven properties of the recovery controller |
-| G, ST, CX, Sn | Assurance-case nodes: goal, strategy, context, solution (evidence) |
+| G, ST, CX, AS5, Sn | Assurance-case nodes: goal, strategy, context, assumption, solution (evidence) |
 
-## Requirements (after "Assumptions and Constraints")
+## Requirements (report Section 3.3)
 
 We state the requirements in Signal Temporal Logic (STL) over discrete steps of 0.5 s (nuScenes keyframes at 2 Hz;
 CARLA runs perception every 0.5 s). The signals are:
 - `a`: the rank of the monitor's action (continue 0, slow down 1, stop 2).
-- `need`, `allow`: the ranks of the least and the most cautious acceptable action for the true situation (§5.2).
+- `need`, `allow`: the ranks of the least and the most cautious acceptable action for the true situation (design spec §5.2).
 - `fault`, `fault_s`: whether a fault is active, overall and on sensor s.
 - `iso_s`: whether sensor s is isolated.
 - In CARLA only: speed, time-to-collision (TTC), and the gap to the hazard.
@@ -58,7 +58,7 @@ violated; its size says by how much. Integer and Boolean signals are compared at
 action level has robustness −0.5. Obligations whose time window runs past the end of a log are dropped rather than
 counted as violations.
 
-## Verification and falsification (new subsection of §6)
+## Verification and falsification (report Section 6.4)
 
 ### Formal verification of the safety logic
 
@@ -139,7 +139,7 @@ trials:
   samples and then focuses where the robustness was lowest.
 
 **Search space:** the dev scene, the start frame and duration of the episode, the target camera, the subtype, and a
-continuous severity level. Severity labels follow the level tables of §5.2, so some violations sit at the label
+continuous severity level. Severity labels follow the level tables in `src/recoverdrive/faults.py`, so some violations sit at the label
 boundaries.
 
 **Trials:**
@@ -189,18 +189,19 @@ camera-confirmed objects while the camera is not isolated, fired at TTC 0.35 s a
 Replayed with Ours-full, the same scenario also collides. Misalignment is the weak spot in both data sources (test F1
 0.47 for C2), and the closed-loop search found a collision that E3, with C1 only, could not show.
 
-## Assurance case (before the Conclusion)
+## Assurance case (report Section 7)
 
 The figure shows the assurance case in Goal Structuring Notation (`docs/media/assurance_case.png`). The top claim
 (G0) is that, under the faults C1–C4, L1, L2, L4 and A1–A3 and within assumptions AS1–AS4, the vehicle meets R1–R6.
 
 The argument splits into four parts:
 - **G1, the shield:** proven by exhaustive checking (SH1–SH5, SH7). It holds under the assumption that the fault is
-  detected; SH6a and SH6b show that this assumption is needed.
+  detected (node AS5); SH6a and SH6b show that this assumption is needed.
 - **G2, the monitor's detection:** measured on the frozen test split. Missed fallback occurs on 5.3% of frames, and
   per fault type the episode-level bounds are given above.
 - **G3, the requirements:** checked on every logged run, and searched for violations by falsification. Each violation
-  class is traced to a cause: an assumption, a label boundary, or a fixed bug.
+  class is traced to a cause: a detection limit of the checks, a violated assumption, or a design choice or label
+  boundary. None is a bug.
 - **G4, failures of the VLM itself:** contained by the rule-based fallback (RC4, proven). On the test split, the
   agent-fault episodes (A1–A3) show no missed fallback.
 

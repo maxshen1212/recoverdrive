@@ -12,6 +12,10 @@ Hugging Face cache. Smoke test passed on gvl2: `--faults C3 --specs R1 --budget 
 on GPU 0), and vLLM 0.32.0+cu129 on GPU 5 (port 8001) answers. Running: B3 (C2/C3 campaigns, tag `gpu_v1`) and B4
 (Ours-full confirmation of `cpu_v1`, tag `confirm_cpu_v1`). Next: B4 for `gpu_v1`, B5 (CARLA), B6.
 - pre-authorized: the user chose option 2 (CUDA 12 builds on gvl2) and was told the smoke test and Phase B follow.
+- 2026-11-24 (audit note): final status. This log stopped at the move to gvl2; B3–B7 were finished in the run
+  `docs/superpowers/runs/2026-11-21-finish-and-vlm-variants.md`: B3 and B4 (`nuscenes_gpu_v1`, `nuscenes_confirm_*`,
+  run at `89d95d7`), B6 triage (T2a, `2fd9cfe`), B5 CARLA campaigns and replays (T1a/T2b `2b4a032`, T1 `d507ced`) and
+  B7 (`339f4ce`). `scripts/setup_env.sh` was removed in `b4d5408`; a plain `uv sync` now installs the CUDA 12 builds.
 
 Tasks:
 - B1 (Task 8 code): `Scenario` for CARLA (defaults reproduce E3), per-step `gap_m` and `collision`, `falsify_carla.py`.
@@ -27,7 +31,7 @@ Tasks:
 |---|---|---|---|
 | Phase A | de57395 | 162 passed, ruff clean; replay 4830/4830 | specs, proofs, CPU falsification, triage, figure (see the ledger) |
 | B1 | 2c086f3 | 167 passed, ruff clean; run_e3 imports | `Scenario` (defaults = E3, tests), run_e3 `scenario=`, per-step `gap_m`/`collision`, `falsify_carla.py`; CARLA regression cell runs in B5 |
-| B2 | (this commit) | 168 passed, ruff clean; dry run exits at the VLM check | `select_worst` (test), `--confirm K --from-tag --vlm-url` replays the worst trials with Ours-full |
+| B2 | 619343b | 168 passed, ruff clean; dry run exits at the VLM check | `select_worst` (test), `--confirm K --from-tag --vlm-url` replays the worst trials with Ours-full |
 
 ## Deferred questions
 - D1 (B1): CARLA falsification objective. Chose: the robustness of R5 (TTC braking and gap ≥ 0), which mixes action
