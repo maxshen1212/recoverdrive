@@ -13,7 +13,7 @@ Two earlier results show that, in the frozen system, the VLM adds little of its 
 The frozen prompt tells the VLM "The deterministic checks are reliable" and asks it to use the images only to
 confirm a flagged sensor, so it follows the checks, including their false alarms and misses. The falsification
 triage puts the remaining errors in the checks' evidence: false alarms on clean frames, faults below the detection
-limit, and cameras with fewer than two reference objects (assumption A3). A VLM that judges the raw images itself
+limit, and cameras with fewer than two reference objects (assumption AS3). A VLM that judges the raw images itself
 could, in principle, cover these cases.
 
 ## The variants

@@ -11,6 +11,17 @@ file:
 Phase B (GPU campaigns, replays with the VLM, CARLA) finished on 2026-11-21; the run log is
 `docs/superpowers/runs/2026-11-21-finish-and-vlm-variants.md`.
 
+Labels (renamed on 2026-11-24 so that no prefix is used twice; older outputs use A1–A4, S1–S7 and C1–C6):
+
+| Prefix | Meaning |
+|---|---|
+| C1–C4, L1, L2, L4, A1–A3 | Injected faults: camera, LiDAR, agent (the VLM) |
+| R1–R6 | Formal requirements (STL) |
+| AS1–AS4 | Assumptions under which the requirements are stated |
+| SH1–SH7 | Proven or refuted properties of the safety shield |
+| RC1–RC6 | Proven properties of the recovery controller |
+| G, ST, CX, Sn | Assurance-case nodes: goal, strategy, context, solution (evidence) |
+
 ## Requirements (after "Assumptions and Constraints")
 
 We state the requirements in Signal Temporal Logic (STL) over discrete steps of 0.5 s (nuScenes keyframes at 2 Hz;
@@ -31,11 +42,11 @@ CARLA runs perception every 0.5 s). The signals are:
 | R6 | No sensor is restored while it is still faulty | G( (fault_s ∧ iso_s) → X (iso_s ∨ ¬fault_s) ), for every sensor s |
 
 **Assumptions:**
-- A1: at most one sensor fault at a time.
-- A2: calibration and timestamps are correct.
-- A3: a camera can be cross-checked only when at least two LiDAR-confirmed objects (≥ 5 points, within 50 m) project
+- AS1: at most one sensor fault at a time.
+- AS2: calibration and timestamps are correct.
+- AS3: a camera can be cross-checked only when at least two LiDAR-confirmed objects (≥ 5 points, within 50 m) project
   into it.
-- A4: LiDAR objects come from ground-truth boxes, an oracle detector.
+- AS4: LiDAR objects come from ground-truth boxes, an oracle detector.
 
 The requirements go beyond reach-avoid:
 - R1 and R2 together bound the action from both sides, so the monitor must be neither too permissive nor too cautious.
@@ -57,22 +68,22 @@ nothing can drift between model and code.
 
 | Property | Statement | Cases | Result |
 |---|---|---|---|
-| S1 | Assume-guarantee: a single fault that is detected and isolated correctly leads to an acceptable action | 77 | holds |
-| S2 | Isolating more sensors never makes the action less cautious | 19,683 | holds |
-| S3 | With no front perception (front camera and LiDAR both isolated), the shield stops | 64 | holds |
-| S4 | Unresolved leads to stop; healthy leads to continue | 512 | holds |
-| S5 | TTC < 2 s leads to stop, whatever the monitor chose | 15 | holds |
-| S6a | Without correct detection: any outcome on a clean frame is acceptable | 257 | fails (false alarm) |
-| S6b | Without correct detection: "healthy" on a fault frame is acceptable | 1 | fails (missed C1 → continue) |
-| S7 | On a fault frame, isolating any single sensor, even the wrong one, gives an acceptable action | 608 | holds |
+| SH1 | Assume-guarantee: a single fault that is detected and isolated correctly leads to an acceptable action | 77 | holds |
+| SH2 | Isolating more sensors never makes the action less cautious | 19,683 | holds |
+| SH3 | With no front perception (front camera and LiDAR both isolated), the shield stops | 64 | holds |
+| SH4 | Unresolved leads to stop; healthy leads to continue | 512 | holds |
+| SH5 | TTC < 2 s leads to stop, whatever the monitor chose | 15 | holds |
+| SH6a | Without correct detection: any outcome on a clean frame is acceptable | 257 | fails (false alarm) |
+| SH6b | Without correct detection: "healthy" on a fault frame is acceptable | 1 | fails (missed C1 → continue) |
+| SH7 | On a fault frame, isolating any single sensor, even the wrong one, gives an acceptable action | 608 | holds |
 
-S1 and S6 split system safety into two parts:
-- **The shield, proven correct (S1):** if the monitor detects the fault, the action is acceptable.
-- **The monitor's detection, measured:** without correct detection, the guarantee breaks, both on false alarms (S6a)
-  and on missed faults (S6b). The counterexample of S6b, a front camera showing the rear view reported as healthy, is
+SH1 and SH6 split system safety into two parts:
+- **The shield, proven correct (SH1):** if the monitor detects the fault, the action is acceptable.
+- **The monitor's detection, measured:** without correct detection, the guarantee breaks, both on false alarms (SH6a)
+  and on missed faults (SH6b). The counterexample of SH6b, a front camera showing the rear view reported as healthy, is
   exactly the failure that caused the collisions of the unmonitored car in CARLA.
 
-S7 adds a less obvious result: naming the wrong sensor is never unsafe on its own. Any single isolation leads to
+SH7 adds a less obvious result: naming the wrong sensor is never unsafe on its own. Any single isolation leads to
 slowing down, and slowing down is acceptable on every fault frame. Detection, not attribution, is what safety depends
 on.
 
@@ -81,13 +92,13 @@ two front sensors (front camera, LiDAR) and two non-front cameras. The controlle
 the shield only checks membership in the front set, so these four sensors cover every role combination of the seven.
 
 The controller has 568 reachable states and 172,672 transitions, and all six properties hold:
-- C1: a confident fault isolates the sensor in the same step.
-- C2: a sensor suspected in two consecutive steps is isolated.
-- C3: an isolated sensor that is neither flagged nor suspected is restored.
-- C4: when the VLM gives no valid answer, the deterministic flags decide.
-- C5 and C6: "degraded" and "healthy" are only reported when they are consistent.
+- RC1: a confident fault isolates the sensor in the same step.
+- RC2: a sensor suspected in two consecutive steps is isolated.
+- RC3: an isolated sensor that is neither flagged nor suspected is restored.
+- RC4: when the VLM gives no valid answer, the deterministic flags decide.
+- RC5 and RC6: "degraded" and "healthy" are only reported when they are consistent.
 
-As a sanity check, switching off re-observation makes C2 fail with a counterexample.
+As a sanity check, switching off re-observation makes RC2 fail with a counterexample.
 
 ### Requirements on the logged runs
 
@@ -105,7 +116,7 @@ frames). This confirms that the STL encoding and the metric agree.
 - R1 and R2 restate the fallback results as specifications. B3 avoids missed fallbacks by being cautious everywhere,
   so it violates R2 in every run.
 - R6 is violated only by the monitors that isolate sensors: in 1.4% of obligations, an isolated sensor is restored
-  while its fault is still active. This happens when the faulty camera loses its reference objects (assumption A3).
+  while its fault is still active. This happens when the faulty camera loses its reference objects (assumption AS3).
 - **CARLA:** Ours-full meets R2, R4 and R5 in every run, and B0 collides in 7 of 12 faulty runs (R5).
   - R6 fails in 2 of the 12 C1 runs of Ours-full. These are the restorations seen in the demo, when nothing is in view
     to cross-check.
@@ -157,7 +168,7 @@ causes, and none to the recovery logic or the shield (both proven above):
 - **The detection limit or the known false-alarm rate of the checks:** false alarms on clean frames (307 trials),
   a check that misses one frame of an active fault (141), faults too weak for the checks (116), other sensors
   flagged during or after the episode (29).
-- **A violated assumption A3,** a camera with fewer than two reference objects: 105 trials.
+- **A violated assumption AS3,** a camera with fewer than two reference objects: 105 trials.
 - **Design choices or label boundaries:** one step of recovery lag (65), temporal checks that compare with the
   still-faulty previous frame (36), levels at the low/medium label boundary (15).
 
@@ -181,16 +192,16 @@ Replayed with Ours-full, the same scenario also collides. Misalignment is the we
 ## Assurance case (before the Conclusion)
 
 The figure shows the assurance case in Goal Structuring Notation (`docs/media/assurance_case.png`). The top claim
-(G0) is that, under the faults C1–C4, L1, L2, L4 and A1–A3 and within assumptions A1–A4, the vehicle meets R1–R6.
+(G0) is that, under the faults C1–C4, L1, L2, L4 and A1–A3 and within assumptions AS1–AS4, the vehicle meets R1–R6.
 
 The argument splits into four parts:
-- **G1, the shield:** proven by exhaustive checking (S1–S5, S7). It holds under the assumption that the fault is
-  detected; S6a and S6b show that this assumption is needed.
+- **G1, the shield:** proven by exhaustive checking (SH1–SH5, SH7). It holds under the assumption that the fault is
+  detected; SH6a and SH6b show that this assumption is needed.
 - **G2, the monitor's detection:** measured on the frozen test split. Missed fallback occurs on 5.3% of frames, and
   per fault type the episode-level bounds are given above.
 - **G3, the requirements:** checked on every logged run, and searched for violations by falsification. Each violation
   class is traced to a cause: an assumption, a label boundary, or a fixed bug.
-- **G4, failures of the VLM itself:** contained by the rule-based fallback (C4, proven). On the test split, the
+- **G4, failures of the VLM itself:** contained by the rule-based fallback (RC4, proven). On the test split, the
   agent-fault episodes (A1–A3) show no missed fallback.
 
 The weakest link is G2. The guarantee holds only as far as the monitor detects faults, and the residual risk sits in

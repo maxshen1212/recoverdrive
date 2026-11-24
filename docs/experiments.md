@@ -6,7 +6,7 @@ One table for every experiment of the project. **Changed** = the independent var
 
 Common to all nuScenes experiments unless stated otherwise: nuScenes v1.0-mini, scene-level split (6 dev scenes for
 tuning, 4 test scenes run once from the frozen commit `5d5283c`), keyframes at 2 Hz, SAM 3 camera detector (6 classes,
-score ≥ 0.5), LiDAR objects = annotated boxes with ≥ 5 points within 50 m (assumption A4), Qwen3-VL-8B-Instruct on
+score ≥ 0.5), LiDAR objects = annotated boxes with ≥ 5 points within 50 m (assumption AS4), Qwen3-VL-8B-Instruct on
 vLLM, the frozen thresholds of `configs/eval.yaml`, the same recovery controller (re-ask ≤ 2, 3-sample vote at T = 0.7,
 vote threshold 0.6) and the same rule-based shield (continue < slow_down < stop). Fault episodes: seeded, 2–6 frames,
 fault ratio 0.5, at most one fault at a time.

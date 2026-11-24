@@ -22,7 +22,7 @@ from recoverdrive.runner import git_state
 from recoverdrive.stl import series
 
 REPO = Path(__file__).resolve().parents[1]
-MIN_REFERENCE = 2  # assumption A3
+MIN_REFERENCE = 2  # assumption AS3
 NEAR = 1.25  # a level below 1.25 x the "medium" value counts as near the low/medium label boundary
 
 
@@ -53,7 +53,7 @@ def classify(spec_name: str, recs: list[dict], t: int, method: str, p: dict, fau
         window = recs[t:t + 2]
         if not any(s in flags_at(x) for x in window):
             if (n := n_ref(r, s)) is not None and n < MIN_REFERENCE:
-                return "missed: camera has < 2 reference objects (A3)"
+                return "missed: camera has < 2 reference objects (AS3)"
             if near_boundary(fault, p, lab["severity"]):
                 return "missed: level near the low/medium label boundary"
             return "missed: fault below the detection limit of the checks"
@@ -81,7 +81,7 @@ def classify(spec_name: str, recs: list[dict], t: int, method: str, p: dict, fau
         if s in flags_at(nxt):
             return "BUG? restored while still flagged"
         if (n := n_ref(nxt, s)) is not None and n < MIN_REFERENCE:
-            return "evidence lost: < 2 reference objects (A3)"
+            return "evidence lost: < 2 reference objects (AS3)"
         return "evidence intermittent: the check misses one frame of an active fault"
     raise ValueError(spec_name)
 

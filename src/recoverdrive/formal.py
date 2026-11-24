@@ -39,7 +39,7 @@ def subsets(items) -> list[tuple[str, ...]]:
 
 
 def single_fault_labels() -> list[FaultLabel]:
-    """Every single-fault label (assumption A1): each fault type on each sensor it can hit, at each severity."""
+    """Every single-fault label (assumption AS1): each fault type on each sensor it can hit, at each severity."""
     cams = [s for s in SENSORS_ALL if s.startswith("camera:")]
     out = []
     for f in SENSOR_FAULTS:
@@ -133,18 +133,18 @@ def verify_shield() -> list[PropertyResult]:
                 yield a in acceptable_actions(lab), _cex(lab, r, a)
 
     return [
-        _check("S1", "Assume-guarantee: under a single fault (A1), if the monitor detects it and isolates the right "
+        _check("SH1", "Assume-guarantee: under a single fault (AS1), if the monitor detects it and isolates the right "
                      "sensor (a clean frame stays healthy), the shield's action is acceptable.", s1()),
-        _check("S2", "Monotone: for the same state, isolating more sensors never gives a less cautious action.", s2()),
-        _check("S3", "No front perception: degraded with CAM_FRONT and LiDAR both isolated gives stop.", s3()),
-        _check("S4", "State rules: unresolved gives stop; healthy gives continue.", s4()),
-        _check("S5", "TTC dominance: TTC < 2 s gives stop whatever the monitor chose; otherwise the action is "
+        _check("SH2", "Monotone: for the same state, isolating more sensors never gives a less cautious action.", s2()),
+        _check("SH3", "No front perception: degraded with CAM_FRONT and LiDAR both isolated gives stop.", s3()),
+        _check("SH4", "State rules: unresolved gives stop; healthy gives continue.", s4()),
+        _check("SH5", "TTC dominance: TTC < 2 s gives stop whatever the monitor chose; otherwise the action is "
                      "unchanged.", s5()),
-        _check("S6a", "Detection is necessary (false alarm): on a clean frame, any outcome other than healthy is "
+        _check("SH6a", "Detection is necessary (false alarm): on a clean frame, any outcome other than healthy is "
                       "acceptable. Expected to fail.", s6a()),
-        _check("S6b", "Detection is necessary (missed fault): on a fault frame, a healthy outcome is acceptable. "
+        _check("SH6b", "Detection is necessary (missed fault): on a fault frame, a healthy outcome is acceptable. "
                       "Expected to fail.", s6b()),
-        _check("S7", "Misattribution tolerance: on any fault frame, isolating exactly one sensor, even the wrong one, "
+        _check("SH7", "Misattribution tolerance: on any fault frame, isolating exactly one sensor, even the wrong one, "
                      "gives an acceptable action.", s7()),
     ]
 
@@ -246,13 +246,13 @@ def verify_controller(graph: ControllerGraph, cfg: RecoveryConfig) -> list[Prope
                 yield e[4] == (), cex(e)
 
     return [
-        _check("C1", "Confident isolation: a fault diagnosis on s with confidence >= tau isolates s in that step.",
+        _check("RC1", "Confident isolation: a fault diagnosis on s with confidence >= tau isolates s in that step.",
                c1()),
-        _check("C2", "Persistence: a sensor suspected in two consecutive steps is isolated.", c2()),
-        _check("C3", "Restoration: an isolated sensor that is neither flagged nor suspected is restored.", c3()),
-        _check("C4", "Agent fallback: when the VLM gives no valid answer, the agent is isolated and the deterministic "
+        _check("RC2", "Persistence: a sensor suspected in two consecutive steps is isolated.", c2()),
+        _check("RC3", "Restoration: an isolated sensor that is neither flagged nor suspected is restored.", c3()),
+        _check("RC4", "Agent fallback: when the VLM gives no valid answer, the agent is isolated and the deterministic "
                      "flags decide.", c4()),
-        _check("C5", "Verify soundness: degraded means every flagged sensor is isolated and every isolation has "
+        _check("RC5", "Verify soundness: degraded means every flagged sensor is isolated and every isolation has "
                      "confidence >= tau.", c5()),
-        _check("C6", "Healthy soundness: healthy means nothing is isolated.", c6()),
+        _check("RC6", "Healthy soundness: healthy means nothing is isolated.", c6()),
     ]

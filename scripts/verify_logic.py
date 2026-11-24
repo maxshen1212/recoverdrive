@@ -44,13 +44,13 @@ def main() -> None:
     ctrl_results = verify_controller(graph, cfg)
     sanity_cfg = RecoveryConfig(reobserve=False)
     sanity = {r.name: r for r in verify_controller(explore_controller(DEFAULT_CONTROLLER_SENSORS, sanity_cfg),
-                                                   sanity_cfg)}["C2"]
+                                                   sanity_cfg)}["RC2"]
     method = (f"Explicit-state model checking of `RecoveryController` with the frozen settings (tau = "
               f"{cfg.conf_threshold}). Sensors: {', '.join(DEFAULT_CONTROLLER_SENSORS)}. The controller never looks at "
               "sensor names and the shield only checks membership in the front set, so two front and two non-front "
               "sensors cover every role combination of the 7 sensors. Inputs per step: no valid answer, ok, "
               "uncertain or fault on each sensor, with confidence 0.5 or 1.0, and every set of flagged sensors.")
-    sanity_line = (f"Sanity check: with re-observation switched off, C2 {'holds' if sanity.holds else 'fails'} "
+    sanity_line = (f"Sanity check: with re-observation switched off, RC2 {'holds' if sanity.holds else 'fails'} "
                    f"({json.dumps(sanity.counterexample)}), so the checker can find violations.")
     md += ["", "## Recovery controller", "", method, "",
            f"Reachable states: {len(graph.states)}; transitions checked: {len(graph.edges)}.", ""]

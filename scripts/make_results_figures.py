@@ -233,7 +233,7 @@ def fig7_replays(tags: list[str]) -> None:
 
 def fig8_variants(rows: dict[str, dict], title: str, name: str) -> None:
     methods = [m for m in (*REFERENCE, *VARIANTS) if m in rows]
-    metrics = [("F1", "F1 (higher is better)"), ("sensor_acc", "right sensor named"), ("false_alarm", "false alarm rate"),
+    metrics = [("F1", "F1 (higher is better)"), ("sensor_acc", "sensor accuracy"), ("false_alarm", "false-alarm rate"),
                ("unnecessary", "unnecessary fallback"), ("missed", "missed fallback")]
     fig, axes = plt.subplots(1, len(metrics), figsize=(15, 0.9 + 0.42 * len(methods)), sharey=True)
     y = np.arange(len(methods))

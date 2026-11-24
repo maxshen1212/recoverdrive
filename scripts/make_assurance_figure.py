@@ -98,12 +98,12 @@ def draw(n: dict, out: Path) -> None:
     ax.axis("off")
 
     g0 = node(ax, "goal", 760, 110, 780, 130, "G0",
-              "Under the faults C1-C4, L1, L2, L4 and A1-A3, and within assumptions A1-A4, the vehicle meets "
+              "Under the faults C1-C4, L1, L2, L4 and A1-A3, and within assumptions AS1-AS4, the vehicle meets "
               "the requirements R1-R6.", 80)
-    c0 = node(ax, "context", 1500, 110, 560, 180, "C0",
+    c0 = node(ax, "context", 1500, 110, 560, 180, "CX0",
               "R1-R6 in STL: missed / unnecessary fallback, recovery, front-fault reaction, TTC braking, no restore "
-              "while faulty. A1 single fault, A2 calibration, A3 >= 2 reference objects, A4 oracle LiDAR.", 62)
-    s0 = node(ax, "strategy", 760, 300, 940, 100, "S0",
+              "while faulty. AS1 single fault, AS2 calibration, AS3 >= 2 reference objects, AS4 oracle LiDAR.", 62)
+    s0 = node(ax, "strategy", 760, 300, 940, 100, "ST0",
               "Argue over the four parts: the shield, the monitor's detection, the closed loop, and VLM failures.", 96)
     gy, gw, gh = 500, 340, 150
     goals = [
@@ -111,13 +111,13 @@ def draw(n: dict, out: Path) -> None:
              "detected (and nothing else is alarmed).", 36),
         node(ax, "goal", 640, gy, gw, gh, "G2", "The monitor detects faults that need a fallback often enough.",
              36),
-        node(ax, "goal", 1110, gy, gw, gh, "G3", "R1-R6 hold on the logged runs, and search does not find "
-             "unexplained violations.", 36),
-        node(ax, "goal", 1590, gy, gw, gh, "G4", "Failures of the VLM itself (bad output, wrong answer, timeout) "
+        node(ax, "goal", 1110, gy, gw, gh, "G3", "R1-R6 are checked on every logged run, and every "
+             "violation found by search is explained.", 36),
+        node(ax, "goal", 1590, gy, gw, gh, "G4", "Failures of the VLM itself (corrupted output, wrong answer, timeout) "
              "are contained.", 36),
     ]
-    a1 = node(ax, "assumption", 440, 720, 250, 160, "A",
-              "S1 needs a correct detection: without it S6a and S6b fail (false alarm, missed fault).", 26)
+    a1 = node(ax, "assumption", 440, 720, 250, 160, "AS5",
+              "The fault is detected. SH1 needs it; without it, SH6a and SH6b fail (false alarm, missed fault).", 26)
     ey, eh = 950, 250
     fals = n["fals"]
     fals_text = ("Falsification, checks-only. nuScenes dev: "
@@ -125,8 +125,8 @@ def draw(n: dict, out: Path) -> None:
                  "trials violate R1-R6" if fals else "Falsification: pending")
     if n["carla"]:
         v, total, coll = n["carla"]
-        fals_text += f"; CARLA: {v}/{total} runs violate R4/R5 ({coll} collisions)"
-    fals_text += ". Every class triaged, no bug." if fals else "."
+        fals_text += f"; CARLA: {v}/{total} runs violate R4/R5 ({coll} collision{"" if coll == 1 else "s"})"
+    fals_text += ". Every class triaged, no logic bug." if fals else "."
     evidence = [
         node(ax, "evidence", 230, ey, 330, eh, "Sn1",
              f"Exhaustive check of the real shield: {', '.join(n['proved'])} hold on every case.", 30),
@@ -137,7 +137,7 @@ def draw(n: dict, out: Path) -> None:
              "R1-R6 checked on every logged run (E2 test split, E3 CARLA closed loop).", 26),
         node(ax, "evidence", 1265, ey, 300, eh, "Sn4", fals_text, 27),
         node(ax, "evidence", 1590, ey, 330, eh, "Sn5",
-             f"Controller model checking ({n['states']} states): {', '.join(n['ctrl'])} hold, incl. C4 agent "
+             f"Controller model checking ({n['states']} states): {', '.join(n['ctrl'])} hold, incl. RC4 agent "
              f"fallback. A1-A3 test episodes: {'no' if n['agent_ok'] else 'some'} missed fallback.", 32),
     ]
 
