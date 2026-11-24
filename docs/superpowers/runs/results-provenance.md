@@ -1,6 +1,6 @@
 # Results provenance
 
-Which commit produced each reported result. `REPORT.md` and `outputs/` are not tracked; a verified backup of them
+Which commit produced each reported result. `outputs/` is not tracked (the local `REPORT.md` was deleted on 2026-11-24); a verified backup of them
 (with this file and a `git bundle` of the repo) is on the lab server at
 `/data/maxshen/backups/recoverdrive/2026-11-15/` (`recoverdrive-results-2026-11-15.tar.gz`, checksum in `SHA256SUMS`).
 Each result commit also has an annotated tag `results/*` (last column of the first table; listed below each later table).
@@ -35,7 +35,7 @@ and the git log, and the note says how sure that is.
 | **E4 latency** | `e4/latency.{json,md}`, built from the dev runs `eval/e4_ours/` and `eval/e4_baselines/` | runs: `4d32c3613c4d314491857e9dcd7b1e4bc386b07e`; report: `b0c0eb0900ef2b9df150b692790011f75066b18e` | Inferred. Dev runs record `commit: null` by design. They ran 17:44-17:50 on HEAD `4d32c36`; `latency.json` was written 18:09 on HEAD `b0c0eb0` (the E4 checkpoint). | `results/e4-latency` |
 | Dev tuning, Phases 1-3 (prompt versions, calibration, smoke runs) | `eval/p1`, `p2`, `p3_dev`, `prompt_*`, `t5_check`, `t6_check`, `smoke_*`; `calib/`; `e0/` | before `5d5283c` | Dev runs record `commit: null`. Not used for any reported test number. | - |
 | Report figures and tables | `report_figures/` (repo root, not tracked) | `make_figures.py` as of `2b86d90` | Inferred. Written 23:27. Later commits changed only a docstring in `make_figures.py`. | - |
-| `REPORT.md` | (repo root, not tracked) | text written at the P5-T6 checkpoint `528b367afbcf6133ad69e912e6cc2ea2cb59468a` | Last edited 23:57 on HEAD `14d3024`. | - |
+| `REPORT.md` | (deleted on 2026-11-24) | text written at the P5-T6 checkpoint `528b367afbcf6133ad69e912e6cc2ea2cb59468a` | Superseded by the report Google Doc; its reproduce commands are in "Reproduce" below. | - |
 | CARLA demo GIFs | `e3/demo/` (copies tracked in `docs/media/`) | `529fcf6` | From the git log. | - |
 
 Later commits (`528b367..14d3024`) changed only documentation, comments, the model download script, the CARLA
@@ -115,8 +115,33 @@ Tag: `results/pramr-test` (`aaef26f`).
 - **Rebased commit.** `docs/superpowers/runs/2026-11-03-phase5.md` lists P5-T6 as `1890796`. That commit was
   rewritten by a rebase and is now `528b367`. Every commit in the table above is an ancestor of `main`
   (checked with `git merge-base --is-ancestor`).
-- **Reproduce one result:** `git checkout <commit>`, then run the command from `REPORT.md` §10. The SQLite caches in
+- **Reproduce one result:** `git checkout <commit>`, then run the matching command from "Reproduce" below. The SQLite caches in
   `outputs/cache/` hold the SAM 3 and VLM results, so a rerun with the same cache returns the same answers without
   calling the models again.
 - **Not in the backup:** `data/nuscenes` (5.1 GB; download again with `./scripts/download_nuscenes_mini.sh`),
   model weights (Hugging Face), and the uv environments.
+
+## Reproduce (moved from the local REPORT.md §10 on 2026-11-24)
+
+```bash
+source scripts/env.sh
+CUDA_VISIBLE_DEVICES=0 VLM_GPU_UTIL=0.5 ./scripts/serve_vlm.sh                        # Qwen3-VL-8B on :8000
+uv run python scripts/run_eval.py --split dev --faults C1 L1 A1 --methods ours_detect --seeds 0 --tag p1   # Phase 1
+uv run python scripts/calibrate.py --tag calib_dev                                      # threshold calibration
+uv run python scripts/run_eval.py --split test --faults all \
+    --methods B0 B1 B2 B3 ours_detect ours_full --seeds 0 1 2 --tag test_final           # E1/E2 (frozen config only)
+./scripts/carla_server.sh & uv run python scripts/run_e3.py --seeds 0 1 2 --tag e3_final  # E3
+uv run python scripts/run_eval.py --split dev --scenes scene-0061 --faults C1 L1 --methods ours_full \
+    --seeds 0 --tag e4_ours --workers 1 --sequential --no-precompute --cache outputs/cache/e4.sqlite   # E4
+uv run python scripts/latency_report.py
+uv run python scripts/replay_ablation.py --tag test_final                               # E5 recovery ablations
+uv run python scripts/run_eval.py --split test --faults all --methods ours_detect ours_full --seeds 0 1 2 \
+    --tag test_abl_no_checks --ablation no_checks                                        # E5 (also qwen_grounding,
+                                                                                         #  --vlm-model for 4B/Thinking)
+uv run python scripts/make_figures.py                                                   # figures + tables
+```
+
+Key commits: frozen configuration `5d5283c`; test run `6069963`; E3 `dd1f526`; Phase 5: recovery ablations and
+VLM gate `5ea57bb`, online ablation variants `4d32c36`, E4 `b0c0eb0`, test ablations `d0cabf3`, model ablations and
+this report in the last two `checkpoint(phase5)` commits (`git log --grep "checkpoint(phase5)"`).
+Raw per-frame logs: `outputs/eval/<tag>/runs/*.jsonl`; E3 runs: `outputs/e3/e3_final/`.

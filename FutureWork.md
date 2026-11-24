@@ -24,7 +24,7 @@ Codes such as E1 or C1 are explained in the glossary at the end.
 
 ## Step 1: make the report complete
 
-**Done (2026-11-15).** Results in `report_figures/tables.md` (S1–S5), `REPORT.md` §4.1, and the provenance file.
+**Done (2026-11-15).** Results in `report_figures/tables.md` (S1–S5), the report Doc, and the provenance file.
 - Checks-only baseline: on sensor faults it matches Ours-full (F1 0.714 for both, difference 0.000 [−0.001, 0.002];
   same false alarms; sensor accuracy 0.933 vs 0.918). Ours-full's higher pooled F1 (0.77 vs 0.60) is the agent faults,
   which a monitor without a VLM cannot have. **On this benchmark the VLM confirms the flags and adds no detection or
@@ -72,7 +72,7 @@ Medium cost: new VLM runs.
 | Small-classifier baseline | Train a small model (for example, gradient boosting) on the check-report numbers of the dev scenes to name the faulty sensor. | Why not a small learned model instead of a VLM? |
 | B1–B3 with check numbers | Give the DriveAgent-style baselines the same check report as Ours. | How much comes from the evidence, and how much from prompt engineering? |
 | B1–B3 prompts tuned | Tune the baseline prompts on the dev scenes with the same budget as Ours (4 versions). | Answers "only Ours was tuned". |
-| PRAM-R-style baseline (**done 2026-11-22**) | The VLM gets per-sensor quality indicators (brightness, point density) instead of cross-sensor checks. Test: F1 0.344 vs 0.765 for Ours-full at the same false-alarm rate; recall 0 on C1, C2, C4 and L2 (`REPORT.md` §4.2). | How do we compare with the closest related work? |
+| PRAM-R-style baseline (**done 2026-11-22**) | The VLM gets per-sensor quality indicators (brightness, point density) instead of cross-sensor checks. Test: F1 0.344 vs 0.765 for Ours-full at the same false-alarm rate; recall 0 on C1, C2, C4 and L2 (report Doc, Section 6.3). | How do we compare with the closest related work? |
 | Larger E3 | Add a second front-camera fault (C3: an all-black front camera during the hazard) and double the runs to 24 per cell. | Does the closed-loop result hold beyond one fault and 12 runs? |
 
 Detailed implementation plans: `docs/superpowers/plans/2026-11-15-step1-report-completeness.md` (Step 1) and
