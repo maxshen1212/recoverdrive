@@ -64,7 +64,7 @@ records its commit in its JSON or `meta.json`.
 | Result | Path | Commit | Source |
 |---|---|---|---|
 | R1–R6 on the logged runs (test split, E3) and Clopper–Pearson bounds | `report_figures/requirements.{md,json}` (repo root, not tracked) | `38707da` | Recorded. Reads `eval/test_final`, `eval/test_checks_only`, `e3/e3_final`. |
-| Shield and controller verification (SH1–SH7, RC1–RC6; named S1–S7, C1–C6 before 2026-11-24) | `report_figures/formal.{md,json}` | `3c3f707` | Recorded. |
+| Shield and controller verification (SH1–SH7, RC1–RC6; named S1–S7, C1–C6 before 2026-11-24) | `report_figures/formal.{md,json}` | `dae580a` (first run `3c3f707`) | Recorded; same results, new labels. |
 | nuScenes falsification, CPU faults (C1, C4, L1, L2, L4; 2,400 trials, checks-only, dev) | `falsify/nuscenes_cpu_v1/` | `fbd56ff` | Recorded (`meta.json`, `summary.md`). |
 | Falsification triage | `falsify/nuscenes_cpu_v1/triage.{md,json}` | `20ebeb8` | Recorded. |
 | Assurance case figure | `docs/media/assurance_case.png` (tracked) | `20ebeb8` | `scripts/make_assurance_figure.py` from the files above. |
